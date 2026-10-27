@@ -44,12 +44,21 @@ const TRADE_SELECT = '*, sector:sectors(name), industry:industries(name)';
 export function createApi(sb) {
   const call = async (fn, body) => {
     const { data, error } = await sb.functions.invoke(fn, { body });
-    if (error) {
-      // supabase-js hides the JSON body of non-2xx replies inside error.context — dig the friendly message out.
-      let msg = 'The server could not complete that request.';
-      try { const j = await error.context?.json?.(); if (j?.error) msg = j.error; } catch { /* keep default */ }
-      throw new Error(msg);
-    }
+      if (error) {
+        console.error('Supabase function error:', error);
+      
+        try {
+          const response = error.context;
+          if (response) {
+            console.error('HTTP status:', response.status);
+            console.error('Response body:', await response.clone().text());
+          }
+        } catch (e) {
+          console.error('Could not read error response:', e);
+        }
+      
+        throw new Error(error.message || 'Supabase function failed.');
+      }
     if (data && data.ok === false) throw new Error(data.error ?? 'The request failed.');
     return data;
   };
