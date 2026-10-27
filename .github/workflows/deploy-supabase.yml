@@ -28,7 +28,7 @@ jobs:
         with:
           version: latest
       - name: Copy the tested engine next to the functions
-        run: ./scripts/copy-engine-to-functions.sh
+        run: bash ./scripts/copy-engine-to-functions.sh
       - name: Link to your Supabase project
         run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
       - name: Create / update the database tables
