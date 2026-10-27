@@ -1,0 +1,28 @@
+{
+  "accountName": "Gabriela Nikolova",
+  "accountCode": "FPTI000645A404",
+  "weekStart": "2026-08-31",
+  "weekEnd": "2026-09-04",
+  "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+  "dates": ["2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"],
+  "totalDelta": [-4.38, -4.21, -0.09, 3.82, 46.42],
+  "accountValue": [-641.45, -696.61, -696.70, -692.88, -646.46],
+  "reportedPerformance": {
+    "totalDeltaWeeklyPnl": 41.56,
+    "realizedNet": 8.59,
+    "quantity": 32,
+    "upDays": 2,
+    "downDays": 3,
+    "bat": 0.50,
+    "wlRatio": 557.22,
+    "avgSizeInPosition": 5,
+    "avgNetWinner": 23.18,
+    "avgNetLoser": -0.04,
+    "maxDrawdown": -8.64,
+    "averageDailyDelta": 8.31,
+    "avgHoldTime": "13d 12:37:38",
+    "biggestNetWinner": 23.18,
+    "biggestNetLoser": -0.04
+  },
+  "notes": "Tuesday 2026-09-01 is the first trading day of September — the recurring monthly market-data/platform/other fee sweep posts to Account Value that day but is deliberately excluded from Total Δ, per spec section 26."
+}

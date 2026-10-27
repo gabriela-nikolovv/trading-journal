@@ -1,0 +1,7 @@
+{
+  "name": "trading-journal-web",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test test/app.test.js test/browser-modules.test.js" },
+  "devDependencies": { "jsdom": "24.1.1" }
+}

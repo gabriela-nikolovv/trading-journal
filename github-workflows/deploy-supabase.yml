@@ -1,0 +1,39 @@
+# Deploys the DATABASE (migrations) and the two Edge Functions (sync, market) to your Supabase project.
+# Runs by itself whenever supabase/ or the engine changes, and can be started by hand (Actions tab → Run workflow).
+name: Deploy Supabase (database + functions)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['supabase/**', 'packages/engine/src/**', 'scripts/copy-engine-to-functions.sh', '.github/workflows/deploy-supabase.yml']
+
+concurrency: deploy-supabase
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Check the settings exist
+        run: |
+          for v in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD PROJECT_REF; do
+            if [ -z "${!v}" ]; then echo "::error::Missing setting $v — see step 'Add the GitHub settings' in SETUP-GUIDE.md"; exit 1; fi
+          done
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Copy the tested engine next to the functions
+        run: ./scripts/copy-engine-to-functions.sh
+      - name: Link to your Supabase project
+        run: supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+      - name: Create / update the database tables
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+      - name: Deploy the sync function
+        run: supabase functions deploy sync --project-ref "$PROJECT_REF"
+      - name: Deploy the market-data function
+        run: supabase functions deploy market --project-ref "$PROJECT_REF"

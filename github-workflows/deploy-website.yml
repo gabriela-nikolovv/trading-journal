@@ -1,0 +1,47 @@
+# Publishes the website (the web/ folder) to GitHub Pages.
+name: Deploy website
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['web/**', 'packages/engine/src/**', 'scripts/copy-engine-to-web.sh', '.github/workflows/deploy-website.yml']
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+    steps:
+      - name: Check the settings exist
+        run: |
+          for v in SUPABASE_URL SUPABASE_ANON_KEY; do
+            if [ -z "${!v}" ]; then echo "::error::Missing setting $v — see step 'Add the GitHub settings' in SETUP-GUIDE.md"; exit 1; fi
+          done
+      - uses: actions/checkout@v4
+      - name: Copy the tested engine into the website
+        run: ./scripts/copy-engine-to-web.sh
+      - name: Write the public connection settings
+        run: |
+          cat > web/js/config.js <<JS
+          window.APP_CONFIG = { SUPABASE_URL: "${SUPABASE_URL}", SUPABASE_ANON_KEY: "${SUPABASE_ANON_KEY}" };
+          JS
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

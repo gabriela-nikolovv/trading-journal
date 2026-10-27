@@ -1,0 +1,8 @@
+# Minimal Supabase CLI configuration (used only by the GitHub deploy workflow).
+project_id = "trading-journal"
+
+[functions.sync]
+verify_jwt = true
+
+[functions.market]
+verify_jwt = true
