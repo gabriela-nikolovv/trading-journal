@@ -33,7 +33,7 @@ jobs:
           done
       - uses: actions/checkout@v4
       - name: Copy the tested engine into the website
-        run: ./scripts/copy-engine-to-web.sh
+        run: bash ./scripts/copy-engine-to-web.sh
       - name: Write the public connection settings
         run: |
           cat > web/js/config.js <<JS
