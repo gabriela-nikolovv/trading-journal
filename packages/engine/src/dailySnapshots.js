@@ -33,10 +33,11 @@ const num = (v) => {
  * @param {Object} o
  * @param {Record<string,string>[]} o.positionRows       parsed `positions` CSV rows
  * @param {Array<{date:string,amount:number,categoryName:string,categoryType:'fee'|'transfer'}>} o.adjustments
+ * @param {Map<string,number>} [o.fillCostsByDate]          per-day Σ of the fee columns of the FILLS (exact, per fill). Used when the positions rows carry no fee columns, and to cross-check them when they do.
  * @param {number} o.startingAccountValue                 account value at the end of the day before the first row
  * @returns {{rows:Array<Object>,warnings:Array<{type:string,message:string}>}}
  */
-export function buildDailySnapshots({ positionRows, adjustments, startingAccountValue }) {
+export function buildDailySnapshots({ positionRows, adjustments, startingAccountValue, fillCostsByDate = null }) {
   const warnings = [];
   /** @type {Map<string,any>} */
   const days = new Map();
@@ -45,6 +46,9 @@ export function buildDailySnapshots({ positionRows, adjustments, startingAccount
     return days.get(d);
   };
 
+  const haveFeeColumns = positionRows.length > 0 && FEE_COLUMNS.some((c) => c in positionRows[0]);
+  const rowCosts = new Map(); // costs as stated by the positions rows, per day (for the cross-check)
+
   let nonUsd = 0;
   for (const r of positionRows) {
     const d = r['Date'];
@@ -52,11 +56,28 @@ export function buildDailySnapshots({ positionRows, adjustments, startingAccount
     const x = day(d);
     x.realized += num(r['Realized']);
     x.unrealizedDelta += num(r['Unrealized Delta']);
-    x.tradeCosts += FEE_COLUMNS.reduce((s, c) => s + num(r[c]), 0);
+    const rowCost = FEE_COLUMNS.reduce((s, c) => s + num(r[c]), 0);
+    x.tradeCosts += rowCost;
+    rowCosts.set(d, (rowCosts.get(d) ?? 0) + rowCost);
     x.qty += Math.abs(num(r['Qty Traded']));
     if (r['Currency'] && r['Currency'] !== 'USD') nonUsd++;
   }
   if (nonUsd) warnings.push({ type: 'non_usd_positions', message: `${nonUsd} position rows are not in USD; they were included unconverted.` });
+
+  if (fillCostsByDate) {
+    if (!haveFeeColumns && positionRows.length > 0) {
+      // Silent zeros would overstate every day by its commissions and fees — use the fills instead.
+      for (const [d, cost] of fillCostsByDate) if (days.has(d)) days.get(d).tradeCosts = cost;
+      warnings.push({ type: 'costs_from_fills', message: 'PropReports’ daily positions data has no fee columns, so each day’s trade costs were taken from the individual fills instead.' });
+    } else if (haveFeeColumns) {
+      const off = [];
+      for (const d of [...days.keys()].sort()) {
+        const a = rowCosts.get(d) ?? 0, b = fillCostsByDate.get(d) ?? 0;
+        if (Math.abs(a - b) > 0.015) off.push(`${d}: positions ${a.toFixed(2)} vs fills ${b.toFixed(2)}`);
+      }
+      if (off.length) warnings.push({ type: 'trade_costs_differ', message: `Trade costs differ between PropReports’ positions data and the fills on ${off.length} day(s) (the positions figure is used): ${off.slice(0, 5).join('; ')}${off.length > 5 ? '; …' : ''}` });
+    }
+  }
 
   for (const a of adjustments) {
     const x = day(a.date);

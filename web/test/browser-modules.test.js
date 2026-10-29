@@ -55,3 +55,12 @@ test('main.js: without Supabase settings it shows a plain explanation instead of
   await import('../js/main.js');
   assert.match(document.getElementById('app').textContent, /not connected to Supabase yet/);
 });
+
+test('api.js: trade queries name the foreign key, so PostgREST cannot report an ambiguous embed', async () => {
+  const seen = [];
+  const chain = new Proxy({}, { get: (_t, k) => k === 'then' ? undefined : (...a) => { if (k === 'select') seen.push(a[0]); return chain; } });
+  const { createApi } = await import('../js/api.js');
+  const api = createApi({ from: () => chain });
+  await api.getTradesPage({ filters: {} }).catch(() => {});
+  assert.ok(seen.some((q) => q.includes('industries!fk_position_industry_in_sector(name)') && q.includes('sectors!position_instances_sector_id_fkey(name)')));
+});

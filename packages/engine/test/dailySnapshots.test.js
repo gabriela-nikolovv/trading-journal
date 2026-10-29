@@ -69,3 +69,26 @@ test('sync engine stores snapshots, chains account value across syncs, and warns
   const r3 = await runSync({ client: fakeClient({ positions, accounts: [{ ...ok, Cash: '999' }] }), store, today: '2026-09-12' });
   assert.ok(r3.warnings.some((w) => w.type === 'account_value_mismatch'));
 });
+
+test('no fee columns in positions rows → trade costs come from the fills, with a warning (no silent zero costs)', () => {
+  const noFeeCols = { Date: '2026-09-01', Symbol: 'ABC', Realized: '10', 'Unrealized Delta': '0', 'Qty Traded': '5', Currency: 'USD' };
+  const { rows, warnings } = buildDailySnapshots({ positionRows: [noFeeCols], adjustments: [], startingAccountValue: 0, fillCostsByDate: new Map([['2026-09-01', 0.37]]) });
+  assert.equal(rows[0].schema1Delta, 9.63);
+  assert.ok(warnings.some((w) => w.type === 'costs_from_fills'));
+});
+
+test('positions fee columns and fills that disagree are reported by day', () => {
+  const { rows, warnings } = buildDailySnapshots({ positionRows: [{ ...pos('2026-09-01', 0), Realized: '10', Comm: '0.30' }], adjustments: [], startingAccountValue: 0, fillCostsByDate: new Map([['2026-09-01', 0.35]]) });
+  assert.equal(rows[0].commissions, 0.3);
+  assert.match(warnings.find((w) => w.type === 'trade_costs_differ').message, /2026-09-01: positions 0.30 vs fills 0.35/);
+});
+
+test('full sync also reads adjustments from the creation date, before the first trade', async () => {
+  const store = createMemoryStore({ firstTradedDate: null });
+  const seen = [];
+  const client = fakeClient({ positions: [pos('2026-09-03', 10)], adjustments: [adj('2026-08-01', 'Fee: Platform', -20)], accounts: [{ 'Account Id': '348', 'First Traded': '2026-09-01', 'Creation Date': '2026-08-01 09:00:00', Cash: '-10', Unrealized: '0' }] });
+  const orig = client.fetchAdjustments; client.fetchAdjustments = async (...a) => { seen.push(a.slice(1)); return orig(...a); };
+  await runSync({ client, store, today: '2026-09-10' });
+  assert.deepEqual(seen[0], ['2026-08-01', '2026-08-31']);
+  assert.equal(store.state.snapshots.find((r) => r.tradeDate === '2026-08-01').accountValue, -20);
+});

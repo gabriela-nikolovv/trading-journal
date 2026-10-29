@@ -13,7 +13,7 @@
 import { normalizeFillRow, normalizeAdjustmentRow, classifyAdjustmentCategory } from './normalize.js';
 import { fillFingerprint, adjustmentFingerprint, classifyIncomingRecord } from './dedupe.js';
 import { reconstructAllPositions } from './positionEngine.js';
-import { planWindows } from './syncPlanner.js';
+import { planWindows, addDays } from './syncPlanner.js';
 import { buildDailySnapshots } from './dailySnapshots.js';
 import { redactToken } from './propreportsClient.js';
 
@@ -109,9 +109,12 @@ export async function runSync({ client, store, today, token, forceFull = false, 
     // A brand-new database has no fills to infer the start date from, so ask
     // PropReports when this account first traded (accounts → "First Traded").
     let firstTradedDate = account.firstTradedDate;
-    if (isFullHistory && !firstTradedDate && client.listAccounts) {
+    let creationDate = null;
+    if (isFullHistory && client.listAccounts) {
       const row = (await client.listAccounts()).find((a) => String(a['Account Id']) === String(account.propreportsAccountId));
-      firstTradedDate = row?.['First Traded'] || null;
+      if (!firstTradedDate) firstTradedDate = row?.['First Traded'] || null;
+      const c = String(row?.['Creation Date'] ?? row?.['Created'] ?? '').slice(0, 10);
+      creationDate = /^\d{4}-\d{2}-\d{2}$/.test(c) ? c : null;
     }
     const windows = planWindows({
       today,
@@ -126,6 +129,11 @@ export async function runSync({ client, store, today, token, forceFull = false, 
     const fillRows = [];
     const adjRows = [];
     const posRows = [];
+    // Charges can be posted before the first trade (sign-up / first-month fees). They still reduce the
+    // balance PropReports reports, so on a full sync also read adjustments from the account's creation date.
+    if (isFullHistory && creationDate && firstTradedDate && creationDate < firstTradedDate) {
+      adjRows.push(...(await client.fetchAdjustments(account.propreportsAccountId, creationDate, addDays(firstTradedDate, -1))));
+    }
     for (const w of windows) {
       fillRows.push(...(await client.fetchFills(account.propreportsAccountId, w.startDate, w.endDate)));
       adjRows.push(...(await client.fetchAdjustments(account.propreportsAccountId, w.startDate, w.endDate)));
@@ -192,10 +200,13 @@ export async function runSync({ client, store, today, token, forceFull = false, 
     const instances = Object.values(byAccount).flat();
 
     // ---- 4b. DAILY SNAPSHOTS (calendar / dashboard / weekly report numbers) ----
+    const fillCostsByDate = new Map();
+    for (const f of fills) fillCostsByDate.set(f.tradeDate, (fillCostsByDate.get(f.tradeDate) ?? 0) + (f.totalFee ?? 0));
     const snap = buildDailySnapshots({
       positionRows: posRows,
       adjustments,
       startingAccountValue: await store.getAccountValueBefore(rangeStart),
+      fillCostsByDate,
     });
     warnings.push(...snap.warnings);
 
@@ -210,7 +221,7 @@ export async function runSync({ client, store, today, token, forceFull = false, 
         if (last && Math.abs(last.accountValue - reported) > 0.05) {
           warnings.push({
             type: 'account_value_mismatch',
-            message: `Reconstructed account value ${last.accountValue.toFixed(2)} differs from PropReports Cash + Unrealized ${reported.toFixed(2)}. Check the first full-history sync and the daily numbers.`,
+            message: `Reconstructed account value ${last.accountValue.toFixed(2)} differs from PropReports Cash + Unrealized ${reported.toFixed(2)}. The difference is ${(reported - last.accountValue).toFixed(2)}. It is usually a charge or deposit dated before the history PropReports returned, or a fee type that is not configured; check Settings and the first full-history sync.`,
           });
         }
       }

@@ -39,26 +39,24 @@ export function toSnapshot(r) {
   };
 }
 
-const TRADE_SELECT = '*, sector:sectors(name), industry:industries(name)';
+// position_instances has TWO foreign keys to industries (industry_id on its own, and the composite
+// (industry_id, sector_id) that forces an industry to belong to its sector), so PostgREST cannot guess
+// which one to follow. Naming the constraint removes the ambiguity.
+const TRADE_SELECT = '*, sector:sectors!position_instances_sector_id_fkey(name), industry:industries!fk_position_industry_in_sector(name)';
 
 export function createApi(sb) {
   const call = async (fn, body) => {
     const { data, error } = await sb.functions.invoke(fn, { body });
-      if (error) {
-        console.error('Supabase function error:', error);
-      
-        try {
-          const response = error.context;
-          if (response) {
-            console.error('HTTP status:', response.status);
-            console.error('Response body:', await response.clone().text());
-          }
-        } catch (e) {
-          console.error('Could not read error response:', e);
-        }
-      
-        throw new Error(error.message || 'Supabase function failed.');
-      }
+    if (error) {
+      // Show the server's own message when it sent one; otherwise say what actually went wrong.
+      let msg = null;
+      try { const c = error.context; const j = await (c?.clone ? c.clone() : c)?.json?.(); if (j?.error) msg = j.error; } catch { /* body was not JSON */ }
+      console.error(`Edge Function "${fn}" failed:`, error);
+      if (!msg) msg = error.name === 'FunctionsFetchError'
+        ? 'Could not reach the server function (network or CORS problem). Check that the functions are deployed, then try again.'
+        : (error.message || 'The server could not complete that request.');
+      throw new Error(msg);
+    }
     if (data && data.ok === false) throw new Error(data.error ?? 'The request failed.');
     return data;
   };

@@ -35,14 +35,14 @@ Supabase is the online database + login + server for the journal.
    - Click **Create new project**. Wait 1–2 minutes until the dashboard appears.
 3. **Write down four values** (put them in a note for now; you will paste them into GitHub in Step 4):
    - **A. Project reference ID** — click the ⚙ **Project Settings** (bottom-left) → **General** → copy **Reference ID** (about 20 letters).
-   - **B. Project URL** — Project Settings → **API** (or **Data API**) → copy **Project URL** (looks like `https://abcdefgh.supabase.co`).
+   - **B. Project URL** — Project Settings → **API** (or **Data API**) → copy **Project URL** (looks like `https://abcdefgh.supabase.co`, with **nothing after `.co`** — not the `/rest/v1/` address shown on the Data API page; the site also strips that if pasted).
    - **C. Anon / public key** — same page → copy the key named **anon public** (a very long text starting with `eyJ…`). If your screen only shows a *Publishable key* (starts with `sb_publishable_`), copy that instead — it is the same idea. This key is **meant to be public**. Do **not** copy the `service_role` / `secret` key anywhere.
    - **D. Access token** — click your avatar (top right) → **Account preferences** → **Access Tokens** → **Generate new token** → name it `github-deploy` → copy it immediately.
    - (E. The database password from step 2.)
 
 ### 1b. Turn OFF public sign-up (important for privacy)
 1. In Supabase: **Authentication** (left menu) → **Sign In / Providers** (or **Providers** → **Email**).
-2. Switch **OFF** "Allow new users to sign up" (it may be called *Enable sign ups*). Click **Save**.
+2. Make sure the **Email** provider is **enabled** (Authentication → Sign In / Providers → Email), otherwise nobody can log in. Then switch **OFF** "Allow new users to sign up" (it may be called *Enable sign ups*). Click **Save**.
 
 ### 1c. Create YOUR login
 1. **Authentication** → **Users** → **Add user** → **Create new user**.

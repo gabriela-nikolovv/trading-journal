@@ -14,7 +14,12 @@ import { createYahooProvider, createQuoteService } from '../_shared/engine/marke
 import { enrichPosition, summarizePortfolio } from '../_shared/engine/positionAnalytics.js';
 import { fetchTradingViewClassification } from '../_shared/engine/taxonomy.js';
 
-const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type' };
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  // supabase-js sends x-client-info and apikey on every call; the browser's preflight must allow them.
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 Deno.serve(async (req) => {
@@ -65,7 +70,7 @@ Deno.serve(async (req) => {
       if (!acct) return json({ ok: false, error: 'No PropReports account set up yet.' }, 409);
 
       const { data: rows, error } = await db.from('position_instances')
-        .select('id, symbol, direction, open_quantity, avg_entry_price, multiplier, stop_loss, notes, opened_at, sector_id, industry_id, journal_close_note, journal_closed_at, sector:sectors(name), industry:industries(name)')
+        .select('id, symbol, direction, open_quantity, avg_entry_price, multiplier, stop_loss, notes, opened_at, sector_id, industry_id, journal_close_note, journal_closed_at, sector:sectors!position_instances_sector_id_fkey(name), industry:industries!fk_position_industry_in_sector(name)')
         .eq('prop_account_id', acct.id).eq('status', 'open');
       if (error) throw error;
 

@@ -53,10 +53,10 @@ export async function render(container, ctx) {
       schema === 'schema2' ? h('div', { class: 'notice' }, 'Schema 2: the month’s profit share is deducted once, on the last trading day of the month; other days show their pre-share result.') : null,
       grid));
   clear(container).append(root);
-  if (state.cal.selected) root.append(await dayPanel(state.cal.selected, ctx, cal, comments, () => render(container, ctx)));
+  if (state.cal.selected) root.append(await dayPanel(state.cal.selected, ctx, cal, comments, snapshots, () => render(container, ctx)));
 }
 
-async function dayPanel(date, ctx, cal, comments, rerender) {
+async function dayPanel(date, ctx, cal, comments, snapshots, rerender) {
   const { api, state } = ctx;
   const cell = cal.weeks.flatMap((w) => w.days).find((d) => d.date === date);
   let trades = [];
@@ -65,6 +65,16 @@ async function dayPanel(date, ctx, cal, comments, rerender) {
     date, schema: state.schema, dailyDelta: cell?.delta ?? null, comment: comments.find((c) => c.date === date)?.comment ?? null,
     trades: trades.map((t) => ({ symbol: t.symbol, direction: t.direction, quantity: t.quantityTraded / (t.status === 'closed' ? 2 : 1), realizedPnl: t.closedAt && t.closedAt.toISOString().slice(0, 10) === date ? t.realizedPnl : null, isClosed: !!t.closedAt && t.closedAt.toISOString().slice(0, 10) === date })),
   });
+  const snap = snapshots.find((x) => x.date === date);
+  const fees = snap ? snap.marketDataFees + snap.platformFees + snap.otherFees : 0;
+  const line = (label, v, neg) => h('tr', {}, h('td', {}, label), h('td', { class: `num ${signClass(neg ? -v : v)}` }, money(neg ? -v : v)));
+  // The same day, split into its parts, so a cent difference against PropReports can be traced to a specific line.
+  const breakdown = snap ? h('div', { class: 'table-wrap' }, h('table', {}, h('tbody', {},
+    line('Trading result (realized + unrealized change)', snap.schema3Delta),
+    line('Trade costs (commissions, exchange and regulatory fees)', snap.commissions, true),
+    line('Fee adjustments (market data, platform, other)', fees, true),
+    h('tr', {}, h('td', {}, h('b', {}, 'Schema 1 result')), h('td', { class: `num ${signClass(snap.schema1Delta)}` }, h('b', {}, money(snap.schema1Delta)))),
+    snap.transfers ? line('Deposits / withdrawals (not P&L)', snap.transfers) : null))) : null;
   const box = h('textarea', { id: 'day-comment', placeholder: 'What happened today? This is suggested automatically when you build the weekly report.' }, detail.comment ?? '');
   return h('div', { class: 'card', id: 'day-panel' },
     h('div', { class: 'row between' }, h('h2', {}, fmtDate(date)), h('div', {}, `${SCHEMA_SHORT[state.schema]}: `, h('b', { class: signClass(detail.dailyDelta) }, detail.dailyDelta === null ? 'no trading data' : money(detail.dailyDelta)))),
@@ -73,6 +83,7 @@ async function dayPanel(date, ctx, cal, comments, rerender) {
         h('tbody', {}, detail.trades.map((t) => h('tr', {}, h('td', {}, h('b', {}, t.symbol)), h('td', {}, h('span', { class: `badge ${t.direction}` }, t.direction.toUpperCase()), t.isClosed ? ' closed' : ' opened'),
           h('td', { class: 'num' }, Math.round(t.quantity)), h('td', { class: `num ${signClass(t.realizedPnl)}` }, t.realizedPnl === null ? '—' : money(t.realizedPnl)))))))
       : h('div', { class: 'muted' }, 'No trades opened or closed on this day.'),
+    breakdown,
     h('label', { class: 'field' }, 'Comment for this day', box),
     h('button', { class: 'btn primary', onclick: async () => {
       try { await api.saveDailyComment(state.account.id, state.userId, date, box.value); toast('Comment saved.'); rerender(); } catch (e) { toast('Could not save the comment.', 'error'); console.error(e); }

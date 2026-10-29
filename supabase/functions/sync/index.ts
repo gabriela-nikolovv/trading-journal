@@ -12,7 +12,12 @@ import { createPropReportsClient, redactToken } from '../_shared/engine/proprepo
 import { runSync } from '../_shared/engine/syncEngine.js';
 import { createSupabaseStore } from '../_shared/supabaseStore.ts';
 
-const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type' };
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  // supabase-js sends x-client-info and apikey on every call; the browser's preflight must allow them.
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 Deno.serve(async (req) => {
