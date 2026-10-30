@@ -7,11 +7,14 @@ import * as calendar from './views/calendar.js';
 import * as trades from './views/trades.js';
 import * as weekly from './views/weekly.js';
 import * as settings from './views/settings.js';
+import * as home from './views/home.js';
 
 export const TABS = [
   ['dashboard', 'Dashboard', dashboard], ['positions', 'Current Positions', positions], ['calendar', 'Calendar', calendar],
-  ['trades', 'Trades', trades], ['weekly', 'Weekly Report', weekly], ['settings', 'Settings', settings],
+  ['weekly', 'Weekly Report', weekly], ['trades', 'Trades', trades], ['settings', 'Settings', settings],
 ];
+// Pages reachable without a tab (the logo opens the intro page).
+const PAGES = [...TABS, ['home', 'Home', home]];
 
 export function startApp({ api, root, pdf, store = globalThis.localStorage, autoSync = true }) {
   const state = { session: null, userId: null, account: null, schema: store?.getItem('schema') ?? 'schema1', schedule: [], classifyTried: new Set(), tab: 'dashboard' };
@@ -65,31 +68,33 @@ export function startApp({ api, root, pdf, store = globalThis.localStorage, auto
     syncEl = h('div', { class: 'syncbar', id: 'syncbar' });
     viewEl = h('main', { id: 'view' });
     const tabs = h('nav', { class: 'tabs' }, TABS.map(([id, label]) => h('button', { class: 'tab', 'data-tab': id, onclick: () => ctx.navigate(id) }, label)));
-    clear(root).append(h('header', { class: 'topbar' }, h('div', { class: 'topbar-inner' }, h('div', { class: 'brand' }, 'Trading ', h('span', {}, 'Journal')), tabs, syncEl)), viewEl);
+    const brand = h('button', { class: 'brand brand-btn', id: 'brand', title: 'Home', onclick: () => ctx.navigate('home') }, 'Trading ', h('span', {}, 'Journal'));
+    clear(root).append(h('header', { class: 'topbar' }, h('div', { class: 'topbar-inner' }, brand, tabs, syncEl)), viewEl);
   }
 
   async function show(tab) {
-    state.tab = TABS.some((t) => t[0] === tab) ? tab : 'dashboard';
+    state.tab = PAGES.some((t) => t[0] === tab) ? tab : 'dashboard';
     for (const b of root.querySelectorAll('.tab')) b.classList.toggle('active', b.dataset.tab === state.tab);
-    const mod = TABS.find((t) => t[0] === state.tab)[2];
+    root.querySelector('.topbar')?.classList.toggle('on-home', state.tab === 'home');
+    const mod = PAGES.find((t) => t[0] === state.tab)[2];
     try { await mod.render(viewEl, ctx); }
     catch (e) { clear(viewEl).append(errorCard('Something went wrong showing this page. Your data is safe.', e)); }
   }
 
+  // The sync area: the button, and under it one quiet line saying when the data was last synced.
+  // Reconciliation details live in Settings → Synchronization, where they can be read in full.
   async function refreshStatus() {
     if (!syncEl || !state.account) return;
-    let s;
-    try { s = await api.getSyncStatus(state.account.id); } catch { return; }
-    const st = s.state;
-    const warnCount = Array.isArray(s.lastRun?.warnings) ? s.lastRun.warnings.length : 0;
-    const label = syncing || st?.status === 'running' ? ['Syncing…', 'run'] : st?.status === 'failed' ? ['Sync failed', 'fail'] : st?.last_success_at ? ['Synced', 'ok'] : ['Not synced yet', ''];
+    let s = null;
+    try { s = await api.getSyncStatus(state.account.id); } catch { /* keep the button usable */ }
+    const st = s?.state ?? null;
+    const when = st?.last_success_at ? new Date(st.last_success_at).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null;
+    const [text, cls, title] = syncing || st?.status === 'running' ? ['Syncing…', 'run', '']
+      : st?.status === 'failed' ? [`Sync failed${when ? ` · data from ${when}` : ''}`, 'fail', `${st.last_error ?? ''} Your previous data is still shown.`.trim()]
+        : when ? [`Synced ${when}`, 'ok', ''] : ['Not synced yet', '', ''];
     clear(syncEl).append(
-      h('span', { class: `pill ${label[1]}`, id: 'sync-pill' }, label[0]),
-      st?.last_success_at ? h('span', { class: 'muted', id: 'sync-time' }, `Last sync ${new Date(st.last_success_at).toLocaleString()}`) : null,
-      s.lastRun && s.lastRun.status === 'success' ? h('span', { class: 'muted' }, `${s.lastRun.fills_new} new · ${s.lastRun.fills_updated} updated`) : null,
-      warnCount ? h('span', { class: 'pill warn', title: 'Open Settings to see the reconciliation warnings' }, `${warnCount} warning${warnCount > 1 ? 's' : ''}`) : null,
-      st?.status === 'failed' && st.last_error ? h('span', { class: 'pill fail', title: st.last_error }, 'Previous data kept') : null,
-      h('button', { class: 'btn primary', id: 'sync-now', disabled: syncing, onclick: () => syncNow({}) }, 'SYNC NOW'));
+      h('button', { class: 'btn primary', id: 'sync-now', disabled: syncing, onclick: () => syncNow({}) }, 'SYNC NOW'),
+      h('div', { class: `sync-status ${cls}`, id: 'sync-status', title: title || null }, text));
   }
 
   async function syncNow({ full = false, quiet = false, skipShell = false } = {}) {

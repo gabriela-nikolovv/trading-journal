@@ -48,8 +48,14 @@ do $$ begin
   assert (select count(*) from daily_account_snapshots) = 3, 'sync2: snapshots upserted, not duplicated';
 end $$;
 
--- the user-controlled journal-close marker must also survive a sync
-update position_instances set journal_close_note = 'planned exit', journal_closed_at = now() where symbol='AAPL';
+-- user-controlled current stop and lots must also survive a sync
+update position_instances set current_stop = 215 where symbol='AAPL';
+insert into position_lots (position_instance_id, user_id, label, entry_keys, original_stop, current_stop)
+select id, user_id, 'Lot 1', array['2026-08-18T14:00:00.000Z|100|200'], 185, 205 from position_instances where symbol='AAPL';
+do $$ begin
+  assert (select count(*) from daily_symbol_pnl) = 2, 'sync2: one per-symbol row per positions row';
+  assert (select unrealized_delta from daily_symbol_pnl where trade_date='2026-09-03' and symbol='AAPL') = 10, 'sync2: held position day result stored';
+end $$;
 
 -- ===== sync 3: AAPL fully closed =====
 insert into sync_runs (id, prop_account_id, user_id) values ((:'b3'::jsonb->>'runId')::uuid, 'aaaaaaaa-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111');
@@ -58,7 +64,9 @@ do $$ begin
   assert (select status from position_instances where symbol='AAPL') = 'closed', 'sync3: AAPL closed';
   assert (select stop_loss from position_instances where symbol='AAPL') = 190, 'sync3: closed position keeps its historical stop loss';
   assert (select closed_at is not null from position_instances where symbol='AAPL'), 'sync3: closed_at set';
-  assert (select journal_close_note from position_instances where symbol='AAPL') = 'planned exit', 'sync3: journal-close note survived the sync';
+  assert (select current_stop from position_instances where symbol='AAPL') = 215, 'sync3: CURRENT STOP survived the sync';
+  assert (select count(*) from position_lots) = 1, 'sync3: lot survived the sync';
+  assert (select original_stop from position_lots) = 185, 'sync3: lot stop survived';
 end $$;
 
 do $$ begin

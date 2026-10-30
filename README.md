@@ -1,6 +1,55 @@
-# Trading Journal — complete application (schema, engine, sync, market data, website)
+# Trading Journal
 
 **START HERE → `SETUP-GUIDE.md`** (step-by-step, no terminal needed).
+
+## Latest update — review round (30 Oct 2026)
+
+Deploy as usual (push to GitHub → both workflows run). Migration `0007_review_round.sql` runs by itself and
+clears the sync cursor, so **the first sync after deploying re-downloads the full history** and rebuilds every
+day with the corrected fee maths. Stops, notes, comments and saved reports are not touched by that.
+
+**Numbers**
+- Fees are counted once. Total Δ is PropReports' own definition: *Net + Adj Fees + Unrealized Δ*. The day's
+  trade fees came in twice (on the executions AND as a daily fee adjustment); now each day uses one source.
+  Which one is decided against PropReports' own Cash + Unrealized from the `accounts` action
+  (`packages/engine/src/dailySnapshots.js`). The Calendar shows one **Fees** line, then **Total Δ**.
+- The weekly report's Total Δ row adds back only the recurring monthly fees (market data, platform,
+  multisport). It leaves trade fees in.
+- The "costs taken from fills" notice that showed up as "1 warning" is gone. Anything left to reconcile is
+  listed in Settings → Synchronization.
+
+**Calendar**: the day panel lists every position open that day: opened, closed, or **held overnight**,
+with PropReports' per-symbol result (new table `daily_symbol_pnl`). There is a stats strip (P&L, green /
+red days, green %, Bats, W/L) and a Days / Months / Years switch.
+
+**Weekly report**: the name and account are split from PropReports' label ("FPTI000645A404 Gabriela
+Nikolova"), so the Settings name field is gone. In the PDF, the day table is 9 pt and centred, with a bold
+first row and first column. There is a gap before PERFORMANCE. Card labels are 8 pt and figures 15 pt bold,
+and the figures in each row line up. The comment is 9 pt bold. **Arial**: Chrome/Edge ask once for permission
+to use the fonts installed on the computer, and then the PDF embeds your own Arial. Other browsers use
+Liberation Sans, which has the same letter widths, so the layout is identical. The four summary boxes are now
+the same size.
+
+**Dashboard**: buying power, Average R and By sector are removed. The KPI cards are equal (the cause was a
+top margin on every card except the first). There are new Overall statistics: a headline row, then sections
+you open (P&L, Scores & totals, Volume, Symbols, Trade duration, Fees). By symbol has Top 10 / Worst 10.
+
+**Current Positions**: each position has an **Original stop** (used for R) and a **Current stop** (it can be
+past the entry and shows "+X locked"). Typing the original stop fills the current one. **Split** turns
+separate buys of one ticker into lots, each with its own stops (new table `position_lots`; exits are
+matched FIFO). The columns are Entry and Days held; Value, P&L % and Close are removed (Close with its code
+and columns).
+
+**Header**: the tab order is Dashboard, Current Positions, Calendar, Weekly Report, Trades, Settings. The
+logo opens a pink intro page; to add a picture, put `web/assets/intro.jpg` in the repo. Under SYNC NOW
+there is just "Synced <time>".
+
+Verified here: 159 engine tests, 31 website tests, all SQL suites on Postgres 16 (incl. 0007, RLS on the
+new tables), both Edge Functions type-checked with Deno 2. Screenshots were taken of every page. Still
+**not** run against live PropReports. The fee de-duplication is chosen automatically from your real
+balance on the first sync.
+
+---
 
 This delivery covers four things, all complete and verified:
 

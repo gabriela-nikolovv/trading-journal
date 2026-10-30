@@ -32,12 +32,18 @@ a { color: var(--pink-dark); }
 .topbar { background: var(--card); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
 .topbar-inner { max-width: 1400px; margin: 0 auto; padding: .6rem 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .brand { font-weight: 800; letter-spacing: .2px; font-size: 1.1rem; }
+.brand-btn { border: 0; background: transparent; padding: .25rem .4rem; border-radius: 8px; color: var(--text); font-family: inherit; }
+.brand-btn:hover { background: var(--pink-soft); }
 .brand span { color: var(--pink); }
 .tabs { display: flex; gap: .25rem; flex-wrap: wrap; flex: 1; }
 .tab { border: 0; background: transparent; padding: .5rem .85rem; border-radius: 999px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; }
 .tab:hover { background: var(--pink-soft); color: var(--pink-dark); }
 .tab.active { background: var(--pink); color: #fff; }
-.syncbar { display: flex; align-items: center; gap: .6rem; font-size: .85rem; }
+.syncbar { display: flex; flex-direction: column; align-items: flex-end; gap: .2rem; }
+.sync-status { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.sync-status.ok::before { content: '● '; color: var(--pos); }
+.sync-status.run { color: var(--pink-dark); }
+.sync-status.fail { color: var(--neg); cursor: help; }
 .pill { padding: .15rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 700; background: #eef0f4; color: var(--muted); }
 .pill.ok { background: #e3f6ea; color: var(--pos); }
 .pill.run { background: var(--pink-soft); color: var(--pink-dark); }
@@ -47,8 +53,15 @@ a { color: var(--pink-dark); }
 main { max-width: 1400px; margin: 0 auto; padding: 1rem; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; }
 .card + .card { margin-top: 1rem; }
+/* Cards laid out side by side (grid / row) are spaced by the gap, never by margin — a top margin on every
+   card but the first is what made the first box of each row look bigger than the rest. */
+.grid > .card, .row > .card, .grid > .card + .card, .row > .card + .card { margin-top: 0; }
+.grid + .card, .card + .grid, .grid + .grid { margin-top: 1rem; }
 .grid { display: grid; gap: 1rem; }
-.cards4 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.cards4, .cards-kpi { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.cards-kpi > .card { height: 100%; }
+.kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.breakdowns { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
 .kpi .label { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; font-weight: 700; }
 .kpi .value { font-size: 1.55rem; font-weight: 800; margin-top: .15rem; }
 .kpi .sub { font-size: .8rem; color: var(--muted); }
@@ -65,6 +78,8 @@ button, .btn { font: inherit; cursor: pointer; }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
 .btn.big { min-height: 44px; min-width: 96px; font-size: 1rem; padding: .6rem 1.2rem; }
 .btn.danger { border-color: #e3b1ab; color: var(--neg); }
+.btn.small { padding: .25rem .6rem; font-size: .8rem; border-radius: 8px; }
+.btn.small.hint { border-color: var(--pink); color: var(--pink-dark); }
 input, select, textarea { font: inherit; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; max-width: 100%; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--pink-line); border-color: var(--pink); }
 textarea { width: 100%; min-height: 90px; resize: vertical; }
@@ -89,15 +104,33 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .badge.stop-invalid { background: #fde8e6; color: var(--neg); }
 .badge.stale { background: var(--warn-bg); color: var(--warn); }
 .badge.info { background: var(--pink-soft); color: var(--pink-dark); }
+.badge.derisked { background: #e3f6ea; color: var(--pos); }
+.badge.held { background: #eef0f4; color: #4b5563; }
+.badge.closed { background: #fdf3f2; color: var(--neg); }
 .notice { padding: .7rem .9rem; border-radius: 10px; background: var(--pink-soft); border: 1px solid var(--pink-line); margin: .75rem 0; }
 .notice.warn { background: var(--warn-bg); border-color: #efd9a0; color: var(--warn); }
 .notice.error { background: #fde8e6; border-color: #f2b9b3; color: var(--neg); }
 .empty { text-align: center; padding: 2rem 1rem; color: var(--muted); }
 
 /* ---------- Current Positions: positions LEFT, exposure square RIGHT ---------- */
-.positions-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 1rem; align-items: start; }
-.exposure-card { aspect-ratio: 1 / 1; display: flex; flex-direction: column; overflow: auto; }
-.pos-actions { display: flex; gap: .5rem; }
+.positions-layout { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 1rem; align-items: start; }
+/* square, but allowed to grow when its content needs more room (overflow must stay visible for that) */
+.exposure-card { aspect-ratio: 1 / 1; display: flex; flex-direction: column; }
+.positions-table { font-size: .88rem; }
+.positions-table th, .positions-table td { padding: .5rem .4rem; }
+.positions-table th { white-space: normal; line-height: 1.15; vertical-align: bottom; font-size: .68rem; }
+.positions-table td.sector-cell { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.positions-table .badge.derisked { font-size: .66rem; padding: .1rem .35rem; }
+.positions-table td { white-space: nowrap; }
+.positions-table .badge { white-space: nowrap; }
+.small-note { font-size: .72rem; }
+.lot-since { margin-left: .9rem; }
+.pos-actions { display: flex; gap: .35rem; }
+tr.has-lots td { border-bottom-color: transparent; }
+tr.lot-row td { background: #fcfcfd; font-size: .9rem; }
+.lot-tag { display: inline-block; white-space: nowrap; margin-left: .9rem; padding: .05rem .5rem; border-left: 3px solid var(--pink); font-weight: 700; font-size: .8rem; }
+.stop-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+.hint-text { display: block; font-weight: 400; color: var(--muted); font-size: .75rem; }
 .bar { height: 9px; background: #f0f1f4; border-radius: 999px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--pink); }
 .bar.neg > span { background: var(--neg); }
@@ -116,6 +149,45 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .cal-week { display: flex; align-items: center; justify-content: center; font-weight: 800; border-radius: 8px; background: var(--pink-soft); color: var(--pink-dark); font-variant-numeric: tabular-nums; }
 .cal-week.neg { color: var(--neg); background: #fdf3f2; } .cal-week.pos { color: var(--pos); background: #f1fbf4; }
 
+/* stats strip + Months / Years views */
+.stat-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .5rem; margin-bottom: 1rem; }
+.stat-strip .stat { padding: .2rem .4rem; border-left: 3px solid var(--pink-line); }
+.stat-strip .label { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; font-weight: 700; }
+.stat-strip .value { font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.period-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; }
+.period-tile { text-align: left; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: .8rem; font: inherit; cursor: pointer; }
+.period-tile:hover { border-color: var(--pink); }
+.period-tile.up { background: #f1fbf4; } .period-tile.down { background: #fdf3f2; } .period-tile.empty-tile { color: #b6b9c2; }
+.pt-label { font-weight: 700; } .pt-value { font-size: 1.35rem; font-weight: 800; margin: .2rem 0; font-variant-numeric: tabular-nums; } .pt-sub { font-size: .78rem; color: var(--muted); }
+table.breakdown td:first-child { color: var(--muted); }
+
+/* overall statistics */
+.headline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem; margin: .4rem 0 1rem; }
+.headline-stat { background: var(--pink-soft); border-radius: 10px; padding: .6rem .75rem; }
+.headline-stat .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; font-weight: 700; color: var(--pink-dark); }
+.headline-stat .value { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.headline-stat .sub { font-size: .72rem; color: var(--muted); }
+.stat-section { border-top: 1px solid var(--line); }
+.stat-section > summary { cursor: pointer; padding: .7rem .2rem; font-weight: 700; list-style: none; display: flex; justify-content: space-between; }
+.stat-section > summary::-webkit-details-marker { display: none; }
+.stat-section > summary::after { content: '▾'; color: var(--muted); transition: transform .15s; }
+.stat-section[open] > summary::after { transform: rotate(180deg); }
+.stat-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem 1.5rem; padding: 0 .2rem 1rem; }
+.stat-group h4 { margin: 0 0 .3rem; font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+.stat-row { display: flex; justify-content: space-between; gap: 1rem; padding: .28rem 0; border-bottom: 1px solid #f3f4f6; font-variant-numeric: tabular-nums; }
+
+/* intro page */
+.intro { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 2rem; align-items: center; min-height: 72vh;
+  background: linear-gradient(135deg, #ffe3f1 0%, #ffd0e8 45%, #ffc2df 100%); border-radius: 22px; padding: 2.5rem; }
+.intro-art { aspect-ratio: 4 / 3; border-radius: 18px; background: radial-gradient(circle at 30% 30%, #fff 0, #ff9fcf 45%, var(--pink) 100%); box-shadow: 0 20px 50px rgba(224, 33, 138, .25); overflow: hidden; }
+.intro-art.has-image { background: none; }
+.intro-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.intro-text h1 { font-size: 2.6rem; color: var(--pink-dark); margin: .2rem 0 .6rem; }
+.intro-text p { font-size: 1.1rem; color: #7a2b55; }
+.intro-kicker { text-transform: uppercase; letter-spacing: .12em; font-size: .78rem; font-weight: 800; color: var(--pink); }
+.intro-links { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.2rem; }
+.intro-btn { background: rgba(255,255,255,.75); border-color: var(--pink-line); }
+
 /* ---------- Weekly report ---------- */
 .report-layout { display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 1rem; align-items: start; }
 .pdf-frame { width: 100%; height: 760px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
@@ -133,6 +205,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .chart { width: 100%; height: 280px; }
 
 @media (max-width: 980px) {
+  .stat-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .breakdowns { grid-template-columns: 1fr; }
+  .period-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .intro { grid-template-columns: 1fr; padding: 1.5rem; }
   .positions-layout, .report-layout { grid-template-columns: 1fr; }
   .exposure-card { aspect-ratio: auto; }
   .cal-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }

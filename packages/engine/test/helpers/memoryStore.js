@@ -33,6 +33,8 @@ export function createMemoryStore({ firstTradedDate = '2026-08-01', categories =
         s.instances = b.instances;
         const kept = (s.snapshots ?? []).filter((r) => !b.snapshots.some((n) => n.tradeDate === r.tradeDate));
         s.snapshots = [...kept, ...b.snapshots].sort((a, b2) => a.tradeDate.localeCompare(b2.tradeDate));
+        const keptSym = (s.symbolDays ?? []).filter((r) => !(b.symbolDays ?? []).some((n) => n.tradeDate === r.tradeDate));
+        s.symbolDays = [...keptSym, ...(b.symbolDays ?? [])];
         s.accountInfo = b.accountInfo;
         s.account.fillsCursorDate = b.cursorDate;
         s.account.adjustmentsCursorDate = b.cursorDate;

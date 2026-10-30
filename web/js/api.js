@@ -27,7 +27,7 @@ export function toTrade(r) {
     openedAt: new Date(r.opened_at), closedAt: r.closed_at ? new Date(r.closed_at) : null,
     stopLoss: r.stop_loss === null ? null : Number(r.stop_loss), notes: r.notes,
     sector: r.sector?.name ?? null, industry: r.industry?.name ?? null, sectorId: r.sector_id, industryId: r.industry_id,
-    multiplier: Number(r.multiplier ?? 1), journalCloseNote: r.journal_close_note, journalClosedAt: r.journal_closed_at,
+    multiplier: Number(r.multiplier ?? 1), currentStop: r.current_stop === null || r.current_stop === undefined ? null : Number(r.current_stop),
   };
 }
 export function toSnapshot(r) {
@@ -96,12 +96,16 @@ export function createApi(sb) {
       if (error) throw new Error(error.message);
       return { rows: (data ?? []).map(toTrade), total: count ?? 0 };
     },
-    async getTradesTouchingDay(day) {
+    /** Every position that was OPEN at some point of `day`: opened, closed, or simply held overnight through it. */
+    async getPositionsOnDay(day) {
       const start = `${day}T00:00:00Z`, end = `${day}T23:59:59Z`;
-      const closed = must(await sb.from('position_instances').select(TRADE_SELECT).gte('closed_at', start).lte('closed_at', end));
-      const opened = must(await sb.from('position_instances').select(TRADE_SELECT).gte('opened_at', start).lte('opened_at', end));
-      const seen = new Set();
-      return [...closed, ...opened].filter((r) => (seen.has(r.id) ? false : seen.add(r.id))).map(toTrade);
+      const rows = must(await sb.from('position_instances').select(TRADE_SELECT).lte('opened_at', end).or(`closed_at.is.null,closed_at.gte."${start}"`));
+      return rows.map(toTrade);
+    },
+    /** PropReports' own per-symbol result for each day (realized + change in unrealized). */
+    async getSymbolDays(from, to) {
+      return (await fetchAll(() => sb.from('daily_symbol_pnl').select('trade_date, symbol, realized, unrealized_delta, trade_costs, quantity_traded').gte('trade_date', from).lte('trade_date', to).order('trade_date')))
+        .map((r) => ({ date: r.trade_date, symbol: r.symbol, realized: Number(r.realized), unrealizedDelta: Number(r.unrealized_delta), tradeCosts: Number(r.trade_costs), quantityTraded: Number(r.quantity_traded) }));
     },
     async getTradeFills(instanceId) {
       const links = must(await sb.from('position_fills').select('running_quantity_after, running_avg_cost_after, fill:raw_fills(datetime, side, quantity, price, symbol, comm, ecn_fee, sec_fee, taf_fee, nscc_fee, clr_fee, misc_fee)').eq('position_instance_id', instanceId));
@@ -114,6 +118,12 @@ export function createApi(sb) {
     classify(symbols) { return call('market', { action: 'classify', symbols }); },
     getQuotes(symbols) { return call('market', { action: 'quotes', symbols }); },
     async updatePosition(id, patch) { must(await sb.from('position_instances').update(patch).eq('id', id)); },
+    async updateLot(id, patch) { must(await sb.from('position_lots').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)); },
+    /** Replaces the lots of one position ([] = one position again). */
+    async saveLots(instanceId, userId, lots) {
+      must(await sb.from('position_lots').delete().eq('position_instance_id', instanceId));
+      if (lots.length) must(await sb.from('position_lots').insert(lots.map((l) => ({ ...l, position_instance_id: instanceId, user_id: userId }))));
+    },
 
     // ---------- taxonomy ----------
     async getSectors() { return must(await sb.from('sectors').select('id, name').order('name')); },

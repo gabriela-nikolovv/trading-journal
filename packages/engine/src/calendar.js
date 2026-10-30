@@ -192,3 +192,40 @@ export function assembleDayDetail({ date, schema, dailyDelta, trades = [], comme
     })),
   };
 }
+
+/**
+ * Headline numbers for any stretch of days (a month, a year, everything):
+ * P&L, green / red days and the share of green days. Days are the ones that
+ * carry a result in the chosen schema series; a day with exactly 0 is neither.
+ * @param {{date:string, delta:number}[]} series   one schema only (schemaSeries.dailySeries)
+ * @param {string} from  inclusive YYYY-MM-DD
+ * @param {string} to    inclusive YYYY-MM-DD
+ */
+export function summarizePeriod(series, from, to) {
+  const days = series.filter((d) => d.date >= from && d.date <= to);
+  const green = days.filter((d) => d.delta > 0).length;
+  const red = days.filter((d) => d.delta < 0).length;
+  return {
+    pnl: round(days.reduce((a, d) => a + d.delta, 0), 2),
+    days: days.length, greenDays: green, redDays: red,
+    greenPct: green + red ? green / (green + red) : null,
+  };
+}
+
+/**
+ * Totals per month (key YYYY-MM) or per year (key YYYY) for the Months / Years views.
+ * @param {{date:string, delta:number}[]} series
+ * @param {'month'|'year'} by
+ */
+export function aggregateSeries(series, by) {
+  const len = by === 'year' ? 4 : 7;
+  const m = new Map();
+  for (const d of series) {
+    const k = d.date.slice(0, len);
+    const x = m.get(k) ?? { key: k, pnl: 0, days: 0, greenDays: 0, redDays: 0 };
+    x.pnl += d.delta; x.days += 1;
+    if (d.delta > 0) x.greenDays += 1; else if (d.delta < 0) x.redDays += 1;
+    m.set(k, x);
+  }
+  return [...m.values()].map((x) => ({ ...x, pnl: round(x.pnl, 2) })).sort((a, b) => a.key.localeCompare(b.key));
+}

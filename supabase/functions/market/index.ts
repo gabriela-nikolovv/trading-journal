@@ -13,6 +13,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createYahooProvider, createQuoteService } from '../_shared/engine/marketData.js';
 import { enrichPosition, summarizePortfolio } from '../_shared/engine/positionAnalytics.js';
 import { fetchTradingViewClassification } from '../_shared/engine/taxonomy.js';
+import { remainingEntries, buildLots, rollUpLots } from '../_shared/engine/positionLots.js';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -70,9 +71,19 @@ Deno.serve(async (req) => {
       if (!acct) return json({ ok: false, error: 'No PropReports account set up yet.' }, 409);
 
       const { data: rows, error } = await db.from('position_instances')
-        .select('id, symbol, direction, open_quantity, avg_entry_price, multiplier, stop_loss, notes, opened_at, sector_id, industry_id, journal_close_note, journal_closed_at, sector:sectors!position_instances_sector_id_fkey(name), industry:industries!fk_position_industry_in_sector(name)')
+        .select('id, symbol, direction, open_quantity, avg_entry_price, multiplier, stop_loss, current_stop, notes, opened_at, sector_id, industry_id, sector:sectors!position_instances_sector_id_fkey(name), industry:industries!fk_position_industry_in_sector(name)')
         .eq('prop_account_id', acct.id).eq('status', 'open');
       if (error) throw error;
+      const ids = (rows ?? []).map((r: any) => r.id);
+
+      // Entry executions (for lots / "two buys of the same ticker") and the user's saved lots.
+      const { data: links } = ids.length
+        ? await db.from('position_fills').select('position_instance_id, fill:raw_fills(datetime, side, quantity, price, is_superseded)').in('position_instance_id', ids)
+        : { data: [] as any[] };
+      const { data: savedLots } = ids.length
+        ? await db.from('position_lots').select('id, position_instance_id, label, entry_keys, original_stop, current_stop, notes').in('position_instance_id', ids).order('created_at')
+        : { data: [] as any[] };
+      const num = (v: any) => (v === null || v === undefined ? null : Number(v));
 
       const symbols = (rows ?? []).map((r: any) => r.symbol);
       const priceMap = await quotes.getQuotes(symbols);
@@ -83,16 +94,26 @@ Deno.serve(async (req) => {
       const needClassify = symbols.filter((s: string) => !autoBy.has(s));
       if (needClassify.length) console.log('symbols awaiting classification:', needClassify.join(','));
 
-      const positions = (rows ?? []).map((r: any) => {
+      const positions: any[] = (rows ?? []).map((r: any) => {
         const a: any = autoBy.get(r.symbol);
         const userChose = !!r.sector?.name;
-        const enriched = enrichPosition({
-          symbol: r.symbol, direction: r.direction, openQuantity: Number(r.open_quantity), avgEntryPrice: Number(r.avg_entry_price),
-          multiplier: Number(r.multiplier ?? 1), stopLoss: r.stop_loss === null ? null : Number(r.stop_loss),
-          sectorName: r.sector?.name ?? (a?.status === 'ok' ? a.sector?.name : null),
-          industryName: r.industry?.name ?? (a?.status === 'ok' ? a.industry?.name : null),
-        }, priceMap.get(r.symbol.toUpperCase()));
-        return { id: r.id, notes: r.notes, openedAt: r.opened_at, sectorId: r.sector_id, industryId: r.industry_id, journalCloseNote: r.journal_close_note, journalClosedAt: r.journal_closed_at, classificationSource: userChose ? 'user' : a?.status === 'ok' ? 'tradingview' : null, ...enriched };
+        const sectorName = r.sector?.name ?? (a?.status === 'ok' ? a.sector?.name : null);
+        const industryName = r.industry?.name ?? (a?.status === 'ok' ? a.industry?.name : null);
+        const quote = priceMap.get(r.symbol.toUpperCase());
+        const common = { symbol: r.symbol, direction: r.direction, multiplier: Number(r.multiplier ?? 1), sectorName, industryName };
+        const enriched = enrichPosition({ ...common, openQuantity: Number(r.open_quantity), avgEntryPrice: Number(r.avg_entry_price),
+          originalStop: num(r.stop_loss), currentStop: num(r.current_stop) }, quote);
+
+        const fills = (links ?? []).filter((l: any) => l.position_instance_id === r.id && l.fill && !l.fill.is_superseded).map((l: any) => l.fill);
+        const entries = remainingEntries(fills, r.direction);
+        const lots = buildLots(entries,
+          (savedLots ?? []).filter((l: any) => l.position_instance_id === r.id).map((l: any) => ({ id: l.id, label: l.label, entryKeys: l.entry_keys ?? [], originalStop: num(l.original_stop), currentStop: num(l.current_stop), notes: l.notes })),
+          { originalStop: num(r.stop_loss), currentStop: num(r.current_stop) })
+          .map((lot: any) => ({ ...lot, ...enrichPosition({ ...common, openQuantity: lot.quantity, avgEntryPrice: lot.entry, originalStop: lot.originalStop, currentStop: lot.currentStop }, quote), lotId: lot.id, label: lot.label, openedAt: lot.openedAt }));
+
+        return { id: r.id, notes: r.notes, openedAt: r.opened_at, sectorId: r.sector_id, industryId: r.industry_id,
+          classificationSource: userChose ? 'user' : a?.status === 'ok' ? 'tradingview' : null,
+          entries, ...rollUpLots(enriched, lots), lots };
       });
       // accountValue is left null until account snapshots are synced — risk % of account is then (correctly) not shown.
       return json({ ok: true, positions, summary: summarizePortfolio(positions, { accountValue: null }), symbolsAwaitingClassification: needClassify });

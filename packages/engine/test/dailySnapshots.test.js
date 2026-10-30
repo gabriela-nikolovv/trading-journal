@@ -70,17 +70,50 @@ test('sync engine stores snapshots, chains account value across syncs, and warns
   assert.ok(r3.warnings.some((w) => w.type === 'account_value_mismatch'));
 });
 
-test('no fee columns in positions rows → trade costs come from the fills, with a warning (no silent zero costs)', () => {
+test('no fee columns in positions rows → trade fees come from the fills (no warning shown to the user)', () => {
   const noFeeCols = { Date: '2026-09-01', Symbol: 'ABC', Realized: '10', 'Unrealized Delta': '0', 'Qty Traded': '5', Currency: 'USD' };
-  const { rows, warnings } = buildDailySnapshots({ positionRows: [noFeeCols], adjustments: [], startingAccountValue: 0, fillCostsByDate: new Map([['2026-09-01', 0.37]]) });
+  const { rows, warnings, symbolRows } = buildDailySnapshots({ positionRows: [noFeeCols], adjustments: [], startingAccountValue: 0, fillCostsByDate: new Map([['2026-09-01', 0.37]]), fillCostsByDateSymbol: new Map([['2026-09-01|ABC', 0.37]]) });
   assert.equal(rows[0].schema1Delta, 9.63);
-  assert.ok(warnings.some((w) => w.type === 'costs_from_fills'));
+  assert.equal(warnings.length, 0);
+  assert.equal(symbolRows[0].tradeCosts, 0.37);
 });
 
-test('positions fee columns and fills that disagree are reported by day', () => {
-  const { rows, warnings } = buildDailySnapshots({ positionRows: [{ ...pos('2026-09-01', 0), Realized: '10', Comm: '0.30' }], adjustments: [], startingAccountValue: 0, fillCostsByDate: new Map([['2026-09-01', 0.35]]) });
-  assert.equal(rows[0].commissions, 0.3);
-  assert.match(warnings.find((w) => w.type === 'trade_costs_differ').message, /2026-09-01: positions 0.30 vs fills 0.35/);
+test('DOUBLE-COUNT FIX: trade fees that ALSO arrive as a daily fee adjustment are counted once (Total Δ = Net + Adj Fees + Unrealized Δ)', () => {
+  // the day's commission shows up both on the fills and as an adjustment
+  const { rows, feeMode } = buildDailySnapshots({
+    positionRows: [{ ...pos('2026-09-02', 0), Realized: '20', Comm: '1.20' }],
+    adjustments: [adj('2026-09-02', 'Fee: Commission', -1.2)],
+    startingAccountValue: 0,
+  });
+  assert.equal(feeMode, 'dedupe');
+  assert.equal(rows[0].commissions, 1.2);
+  assert.equal(rows[0].schema1Delta, 18.8);   // not 17.60
+  assert.equal(rows[0].accountValue, 18.8);
+});
+
+test('auto mode follows PropReports’ own balance: when the adjustment is a DIFFERENT charge, both are kept', () => {
+  const input = { positionRows: [{ ...pos('2026-09-02', 0), Realized: '20', Comm: '1.20' }], adjustments: [adj('2026-09-02', 'Locate fee', -3)], startingAccountValue: 0 };
+  assert.equal(buildDailySnapshots({ ...input, reportedAccountValue: 15.8 }).feeMode, 'separate');
+  assert.equal(buildDailySnapshots({ ...input, reportedAccountValue: 15.8 }).rows[0].schema1Delta, 15.8);
+  assert.equal(buildDailySnapshots({ ...input, reportedAccountValue: 17 }).feeMode, 'dedupe');
+});
+
+test('recurring monthly fees stay out of the weekly Total Δ row, daily trade-fee adjustments stay IN', () => {
+  const { rows } = buildDailySnapshots({
+    positionRows: [{ ...pos('2026-09-01', 0), Realized: '10' }],
+    adjustments: [adj('2026-09-01', 'Fee: Platform', -25.95), adj('2026-09-01', 'Fee: ECN', -0.5)],
+    startingAccountValue: 0,
+  });
+  assert.equal(rows[0].schema1Delta, -16.45);
+  assert.equal(reportDayDelta(rows[0]), 9.5); // only the platform fee is added back
+});
+
+test('per-symbol day rows include overnight positions that only moved in price', () => {
+  const { symbolRows } = buildDailySnapshots({
+    positionRows: [{ ...pos('2026-09-02', 12.5), Symbol: 'held' }, { ...pos('2026-09-02', 0), Symbol: 'NEW', Realized: '3', 'Qty Traded': '200' }],
+    adjustments: [], startingAccountValue: 0,
+  });
+  assert.deepEqual(symbolRows.map((s) => [s.symbol, s.dayResult, s.quantityTraded]), [['HELD', 12.5, 0], ['NEW', 3, 200]]);
 });
 
 test('full sync also reads adjustments from the creation date, before the first trade', async () => {

@@ -200,30 +200,38 @@ export async function runSync({ client, store, today, token, forceFull = false, 
     const instances = Object.values(byAccount).flat();
 
     // ---- 4b. DAILY SNAPSHOTS (calendar / dashboard / weekly report numbers) ----
+    // PropReports' own current Cash + Unrealized (accounts action) is read FIRST: it is the
+    // reference that decides how fees are counted (see dailySnapshots.js) and the cross-check below.
+    let accountInfo = null;
+    if (client.listAccounts) {
+      const row = (await client.listAccounts()).find((a) => String(a['Account Id']) === String(account.propreportsAccountId));
+      if (row && row['Cash'] !== '' && row['Cash'] !== undefined) accountInfo = { cash: Number(row['Cash']), unrealized: Number(row['Unrealized'] || 0) };
+    }
     const fillCostsByDate = new Map();
-    for (const f of fills) fillCostsByDate.set(f.tradeDate, (fillCostsByDate.get(f.tradeDate) ?? 0) + (f.totalFee ?? 0));
+    const fillCostsByDateSymbol = new Map();
+    for (const f of fills) {
+      fillCostsByDate.set(f.tradeDate, (fillCostsByDate.get(f.tradeDate) ?? 0) + (f.totalFee ?? 0));
+      const k = `${f.tradeDate}|${String(f.symbol).toUpperCase()}`;
+      fillCostsByDateSymbol.set(k, (fillCostsByDateSymbol.get(k) ?? 0) + (f.totalFee ?? 0));
+    }
     const snap = buildDailySnapshots({
       positionRows: posRows,
       adjustments,
       startingAccountValue: await store.getAccountValueBefore(rangeStart),
       fillCostsByDate,
+      fillCostsByDateSymbol,
+      reportedAccountValue: accountInfo ? accountInfo.cash + accountInfo.unrealized : null,
     });
     warnings.push(...snap.warnings);
 
-    // Cross-check against PropReports' own current Cash + Unrealized (accounts action).
-    let accountInfo = null;
-    if (client.listAccounts) {
-      const row = (await client.listAccounts()).find((a) => String(a['Account Id']) === String(account.propreportsAccountId));
-      if (row && row['Cash'] !== '' && row['Cash'] !== undefined) {
-        accountInfo = { cash: Number(row['Cash']), unrealized: Number(row['Unrealized'] || 0) };
-        const last = snap.rows.at(-1);
-        const reported = accountInfo.cash + accountInfo.unrealized;
-        if (last && Math.abs(last.accountValue - reported) > 0.05) {
-          warnings.push({
-            type: 'account_value_mismatch',
-            message: `Reconstructed account value ${last.accountValue.toFixed(2)} differs from PropReports Cash + Unrealized ${reported.toFixed(2)}. The difference is ${(reported - last.accountValue).toFixed(2)}. It is usually a charge or deposit dated before the history PropReports returned, or a fee type that is not configured; check Settings and the first full-history sync.`,
-          });
-        }
+    if (accountInfo) {
+      const last = snap.rows.at(-1);
+      const reported = accountInfo.cash + accountInfo.unrealized;
+      if (last && Math.abs(last.accountValue - reported) > 0.05) {
+        warnings.push({
+          type: 'account_value_mismatch',
+          message: `Account value rebuilt from the daily data is ${last.accountValue.toFixed(2)}, but PropReports reports Cash + Unrealized of ${reported.toFixed(2)} (difference ${(reported - last.accountValue).toFixed(2)}). Usually a charge or deposit dated before the history PropReports returned. Settings → Re-download full history normally clears it.`,
+        });
       }
     }
 
@@ -236,6 +244,7 @@ export async function runSync({ client, store, today, token, forceFull = false, 
       adjustmentsNew: adjDiff.inserts.length,
       adjustmentsUpdated: adjDiff.replacements.length,
       snapshotDays: snap.rows.length,
+      feeMode: snap.feeMode,
       positionsDetected: instances.length,
       openPositions: instances.filter((p) => p.status === 'open').length,
     };
@@ -246,6 +255,7 @@ export async function runSync({ client, store, today, token, forceFull = false, 
       adjustments: adjDiff,
       instances,
       snapshots: snap.rows,
+      symbolDays: snap.symbolRows,
       accountInfo,
       cursorDate: today,
       stats,

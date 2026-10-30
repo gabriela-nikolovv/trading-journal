@@ -34,12 +34,22 @@ test('signed in but no PropReports account yet → first-time setup screen with 
   assert.match(text(document.body), /never typed into or sent to this page/);
 });
 
-test('shell: six tabs, SYNC NOW always visible, sync status + warning count shown', async () => {
+test('shell: six tabs with Weekly Report before Trades; SYNC NOW with the last-sync line under it; no counts, warnings or "null"', async () => {
   const { $, $$ } = await boot();
-  assert.deepEqual($$('.tab').map((b) => b.textContent), TABS.map((t) => t[1]));
+  assert.deepEqual($$('.tab').map((b) => b.textContent), ['Dashboard', 'Current Positions', 'Calendar', 'Weekly Report', 'Trades', 'Settings']);
   assert.equal($('#sync-now').textContent, 'SYNC NOW');
-  assert.equal($('#sync-pill').textContent, 'Synced');
-  assert.match(text($('#syncbar')), /1 warning/);
+  assert.match(text($('#sync-status')), /^Synced /);
+  assert.equal($('#sync-now').nextElementSibling, $('#sync-status'), 'status sits under the button');
+  const bar = text($('#syncbar'));
+  assert.ok(!/warning|new ·|updated|null/i.test(bar), bar);
+});
+
+test('the Trading Journal logo opens the pink intro page', async () => {
+  const { $ } = await boot();
+  $('#brand').click();
+  await waitFor(() => $('#intro'));
+  assert.match(text($('#intro')), /Hi Gabriela/);
+  assert.equal(document.querySelectorAll('.tab.active').length, 0);
 });
 
 test('the site syncs automatically when opened, and SYNC NOW syncs again', async () => {
@@ -74,31 +84,75 @@ test('Dashboard: schema switch changes the numbers and labels; schemas are never
   assert.ok($('svg.chart line[stroke-dasharray]'), 'zero line drawn so negatives are visible');
 });
 
-test('Dashboard: buying power is NOT faked as account value', async () => {
-  const { $$ } = await boot();
-  const bp = $$('.kpi').find((k) => /Buying power/.test(k.textContent));
-  assert.match(text(bp), /n\/a/);
+test('Dashboard: no buying power card; KPI cards share one grid; overall stats headline + closed sections; Worst 10 tab', async () => {
+  const { $, $$ } = await boot();
+  assert.ok(!$$('.kpi').some((k) => /Buying power/.test(k.textContent)));
+  assert.equal($$('.cards-kpi > .kpi').length, 6);
+  assert.ok(!/Average R|needs stop losses|By sector|Unclassified/.test(text($('#view'))));
+  const ov = $('#overall-stats');
+  assert.match(text(ov), /Net P&L/); assert.match(text(ov), /BAT/); assert.match(text(ov), /W\/L ratio/);
+  assert.deepEqual($$('#overall-stats details summary').map(text), ['P&L', 'Scores & totals', 'Volume', 'Symbols', 'Trade duration', 'Fees']);
+  assert.ok($$('#overall-stats details').every((d) => !d.open), 'deeper sections start closed');
+  assert.match(text($('#symbol-card')), /WIN/);
+  [...$('#symbol-card').querySelectorAll('.segmented button')].find((b) => b.textContent === 'Worst 10').click();
+  await waitFor(() => $('#symbol-card tbody') && /LOSS/.test(text($('#symbol-card tbody'))) && !/WIN/.test(text($('#symbol-card tbody'))));
 });
 
-test('Current Positions: positions on the LEFT, Exposure square on the RIGHT, big Edit and Close on every row', async () => {
+test('Current Positions: layout, the agreed columns, small Edit buttons, no Close', async () => {
   const { $, $$ } = await boot({}, { tab: 'positions' });
   await waitFor(() => $('.positions-layout'));
   const kids = [...$('.positions-layout').children];
   assert.ok(kids[0].classList.contains('positions-main'));
   assert.ok(kids[1].classList.contains('exposure-card'));
-  assert.match(document.styleSheets.length >= 0 ? 'ok' : '', /ok/);
-  const edits = $$('.btn-edit'), closes = $$('.btn-close');
-  assert.equal(edits.length, 3); assert.equal(closes.length, 3);
-  assert.ok([...edits, ...closes].every((b) => b.classList.contains('big')));
+  assert.deepEqual($$('.positions-table thead th').map(text).filter(Boolean), ['Symbol', 'Qty', 'Entry', 'Price', 'Unrealized P&L', 'Original stop', 'Current stop', 'Current R', 'Risk to stop', 'Days held', 'Sector / Industry']);
+  assert.equal($$('.btn-edit').length, 4);
+  assert.ok($$('.btn-edit').every((b) => b.classList.contains('small')));
+  assert.equal($$('.btn-close').length, 0);
+  assert.ok(!/Close/.test($$('.pos-actions').map(text).join(' ')));
+  assert.equal(text($$('.positions-table tbody tr')[0].children[9]), '5', 'days held');
 });
 
-test('Current Positions: STOP NOT SET, INVALID STOP and PRICE UNAVAILABLE are shown instead of invented numbers', async () => {
+test('Current Positions: stop NOT SET, a bad ORIGINAL stop and NO PRICE are flagged; a derisked stop is shown as such', async () => {
   const { $$ } = await boot({}, { tab: 'positions' });
-  await waitFor(() => $$('tbody tr').length === 3);
-  const rows = $$('tbody tr').map(text);
-  assert.match(rows[1], /STOP NOT SET/); assert.match(rows[1], /PRICE UNAVAILABLE/);
-  assert.match(rows[2], /INVALID STOP/);
+  await waitFor(() => $$('.positions-table tbody tr').length >= 4);
+  const rows = $$('.positions-table tbody tr').map(text);
+  assert.match(rows[1], /NOT SET/); assert.match(rows[1], /NO PRICE/);
+  assert.match(rows[2], /Check stop/); assert.match(rows[2], /locked/);
   assert.match(rows[0], /\+1R/);
+  assert.match(rows[0], /2 separate entries/);
+});
+
+test('Split position: lots are listed under it with their own stops, R and DERISKED badge; lot Edit writes only that lot', async () => {
+  const { $, $$, api } = await boot({}, { tab: 'positions' });
+  await waitFor(() => $$('.lot-row').length === 2);
+  const lots = $$('.lot-row').map(text);
+  assert.match(lots[0], /Lot 1/); assert.match(lots[0], /\+50\.00 locked/); assert.match(lots[0], /\+2R/);
+  assert.match(lots[1], /Lot 2/);
+  $$('.btn-edit-lot')[1].click();
+  const cur = await waitFor(() => $('#cur-stop-input'));
+  cur.value = '12.5'; cur.dispatchEvent(new window.Event('input'));
+  assert.match(text($('.overlay')), /derisked/);
+  $('#save-edit').click();
+  await waitFor(() => api.calls.updateLot.length === 1);
+  assert.deepEqual(api.calls.updateLot[0], ['L2', { original_stop: 11, current_stop: 12.5, notes: null }]);
+  assert.equal(api.calls.updatePosition.length, 0);
+});
+
+test('Split: separate entries are proposed as separate lots (by entry day) and saved; "Keep as one position" undoes it', async () => {
+  const { $, $$, api } = await boot({}, { tab: 'positions' });
+  (await waitFor(() => $('.btn-split.hint'))).click();
+  await waitFor(() => $$('.lot-select').length === 2);
+  assert.deepEqual($$('.lot-select').map((s) => s.value), ['0', '1']);
+  $('#save-split').click();
+  await waitFor(() => api.calls.saveLots.length === 1);
+  const [id, lots] = api.calls.saveLots[0];
+  assert.equal(id, 'p1');
+  assert.deepEqual(lots.map((l) => [l.label, l.entry_keys.length, l.original_stop, l.current_stop]), [['Lot 1', 1, 9, 9], ['Lot 2', 1, 9, 9]]);
+  await waitFor(() => $$('.btn-split').some((b) => b.textContent === 'Lots'));
+  $$('.btn-split').find((b) => b.textContent === 'Lots').click();
+  (await waitFor(() => $('#merge-lots'))).click();
+  await waitFor(() => api.calls.saveLots.length === 2);
+  assert.deepEqual(api.calls.saveLots[1], ['p4', []]);
 });
 
 test('Edit: choosing a sector lists ONLY that sector’s industries (Health Technology ≠ Software)', async () => {
@@ -114,33 +168,34 @@ test('Edit: choosing a sector lists ONLY that sector’s industries (Health Tech
   assert.equal($('#industry-select').disabled, true, 'industry needs a sector first');
 });
 
-test('Edit: an invalid stop on a long is blocked with a clear message; a valid one saves ONLY journal fields', async () => {
+test('Edit: original stop fills the current stop; the current stop may go ABOVE the entry; only journal fields are saved', async () => {
   const { $, api } = await boot({}, { tab: 'positions' });
   (await waitFor(() => $('.btn-edit'))).click();
-  const stop = await waitFor(() => $('#stop-input'));
-  stop.value = '12'; stop.dispatchEvent(new window.Event('input'));
-  assert.match(text($('.overlay')), /stop must be BELOW the entry/);
-  [...document.querySelectorAll('.overlay .btn.primary')].find((b) => b.textContent === 'Save').click();
-  await tick(40);
-  assert.equal(api.calls.updatePosition.length, 0, 'invalid stop must not be saved');
-  stop.value = '9.5'; stop.dispatchEvent(new window.Event('input'));
-  [...document.querySelectorAll('.overlay .btn.primary')].find((b) => b.textContent === 'Save').click();
+  const orig = await waitFor(() => $('#orig-stop-input'));
+  const cur = $('#cur-stop-input');
+  orig.value = '9.5'; orig.dispatchEvent(new window.Event('input'));
+  assert.equal(cur.value, '9.5', 'current stop follows the original until moved');
+  cur.value = '10.8'; cur.dispatchEvent(new window.Event('input'));
+  assert.match(text($('.overlay')), /derisked/);
+  orig.value = '9.4'; orig.dispatchEvent(new window.Event('input'));
+  assert.equal(cur.value, '10.8', 'a moved current stop is not overwritten');
+  $('#save-edit').click();
   await waitFor(() => api.calls.updatePosition.length === 1);
   const [id, patch] = api.calls.updatePosition[0];
   assert.equal(id, 'p1');
-  assert.deepEqual(Object.keys(patch).sort(), ['industry_id', 'notes', 'sector_id', 'stop_loss']);
-  assert.equal(patch.stop_loss, 9.5);
+  assert.deepEqual(Object.keys(patch).sort(), ['current_stop', 'industry_id', 'notes', 'sector_id', 'stop_loss']);
+  assert.deepEqual([patch.stop_loss, patch.current_stop], [9.4, 10.8]);
 });
 
-test('Close: says plainly that no order is sent, and only writes a journal note (no trading facts)', async () => {
+test('Edit: an ORIGINAL stop on the wrong side of the entry is blocked with an explanation', async () => {
   const { $, api } = await boot({}, { tab: 'positions' });
-  (await waitFor(() => $('.btn-close'))).click();
-  const modal = await waitFor(() => $('.overlay'));
-  assert.match(text(modal), /does NOT close the trade/);
-  assert.match(text(modal), /No order is sent/);
-  [...modal.querySelectorAll('.btn.primary')].find((b) => /Note as closed/.test(b.textContent)).click();
-  await waitFor(() => api.calls.updatePosition.length === 1);
-  assert.deepEqual(Object.keys(api.calls.updatePosition[0][1]).sort(), ['journal_close_note', 'journal_closed_at']);
+  (await waitFor(() => $('.btn-edit'))).click();
+  const orig = await waitFor(() => $('#orig-stop-input'));
+  orig.value = '12'; orig.dispatchEvent(new window.Event('input'));
+  assert.match(text($('.overlay')), /must be BELOW the entry/);
+  $('#save-edit').click();
+  await tick(40);
+  assert.equal(api.calls.updatePosition.length, 0);
 });
 
 test('Calendar: weeks start on MONDAY; Sept 2026 grid begins Mon 31 Aug; weekly result beside each week', async () => {
@@ -160,17 +215,41 @@ test('Calendar: switching to Schema 3 changes the weekly result to the pure-trad
   await waitFor(() => /41\.56/.test(text($$('.cal-week')[0])));
 });
 
-test('Calendar: clicking a day shows its trades and a comment box; saving stores the comment', async () => {
+test('Calendar: a day lists positions HELD overnight too, with PropReports’ per-symbol result; one Fees line, then Total Δ', async () => {
   const { $, api } = await boot({}, { tab: 'calendar', before: (c) => { c.state.cal = { year: 2026, month: 9, selected: null }; } });
   (await waitFor(() => $('.cal-cell[data-date="2026-09-04"]'))).click();
   const panel = await waitFor(() => $('#day-panel'));
-  assert.match(text(panel), /WIN/);
+  await waitFor(() => $('#day-positions'));
+  const rows = [...$('#day-positions').querySelectorAll('tbody tr')].map(text);
+  assert.ok(rows.some((r) => /HOLD/.test(r) && /Held/.test(r) && /12\.50/.test(r)), rows.join(' | '));
+  assert.ok(rows.some((r) => /WIN/.test(r) && /Closed/.test(r) && /21\.18/.test(r)), rows.join(' | '));
+  const lines = [...panel.querySelectorAll('table.breakdown tr')].map((tr) => text(tr.firstChild));
+  assert.deepEqual(lines, ['Trading result (realized + change in unrealized)', 'Fees', 'Total Δ']);
+  assert.ok(!/Trade costs|Fee adjustments/.test(text(panel)));
   assert.equal($('#day-comment').value, 'Waited for the right entry.');
   $('#day-comment').value = 'Updated note';
   [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Save comment').click();
   await waitFor(() => api.calls.saveComment.length === 1);
   assert.equal(api.calls.saveComment[0][3], 'Updated note');
-  assert.equal(api.calls.saveComment[0][2], '2026-09-04');
+});
+
+test('Calendar: month stats strip (P&L, green/red days, green %, Bats, W/L) and Days / Months / Years switch', async () => {
+  const { $, $$ } = await boot({}, { tab: 'calendar', before: (c) => { c.state.cal = { year: 2026, month: 9, selected: null }; } });
+  const strip = await waitFor(() => $('#cal-stats'));
+  const vals = Object.fromEntries([...strip.querySelectorAll('.stat')].map((s) => [text(s.querySelector('.label')), text(s.querySelector('.value'))]));
+  assert.equal(vals['Month P&L · Schema 1'], '($5.01)');   // Sep 1–4: −55.16 −0.09 +3.82 +46.42
+  assert.equal(vals['Green days'], '2'); assert.equal(vals['Red days'], '2'); assert.equal(vals['Green %'], '50%');
+  assert.equal(vals['Bats'], '50%');
+  assert.notEqual(vals['W/L'], '—');
+  $$('.segmented button').find((b) => b.textContent === 'Months').click();
+  const months = await waitFor(() => $('#months-grid'));
+  assert.equal(months.querySelectorAll('.period-tile').length, 12);
+  assert.match(text(months.querySelector('[data-month="2026-08"]')), /\(4\.38\)/);
+  months.querySelector('[data-month="2026-09"]').click();
+  await waitFor(() => $('.cal-grid'));
+  $$('.segmented button').find((b) => b.textContent === 'Years').click();
+  const years = await waitFor(() => $('#years-grid'));
+  assert.match(text(years), /2026/);
 });
 
 test('Trades: lists completed trades with gross, fees and net side by side; filter sends the query; row opens detail with executions', async () => {
@@ -211,6 +290,8 @@ test('Weekly Report: generate → editable fields → live preview → manual ed
   assert.equal($('#t-upDays').value, '2'); assert.equal($('#t-downDays').value, '3');
   await waitFor(() => pdf.calls.length >= 1);
   assert.equal(pdf.calls[0].weeklyComment, 'Patient week.');
+  assert.equal(pdf.calls[0].accountCode, 'FPTI000645A404', 'account line shows only the code');
+  assert.equal(pdf.calls[0].accountName, 'Gabriela Nikolova', 'name parsed from the PropReports label');
   // manual presentation edit on one day → totals follow the daily row, trading data untouched
   $('#d-delta-4').value = '50'; $('#d-delta-4').dispatchEvent(new window.Event('input'));
   assert.equal($('#t-totalDeltaWeeklyPnl').value, '45.14');
@@ -222,6 +303,20 @@ test('Weekly Report: generate → editable fields → live preview → manual ed
   const finalized = api.calls.saveWeekly.find((r) => r.status === 'finalized');
   assert.equal(finalized.computed_data.days[4].totalDelta, 46.42, 'DATABASE TRUTH is stored separately from the edit');
   assert.equal(finalized.manual_overrides.days[4].totalDelta, 50);
+});
+
+test('Weekly Report: the four summary boxes on the page are one equal-width grid', async () => {
+  const { $, $$ } = await boot({}, { tab: 'weekly', before: (c) => { c.state.week = { weekStart: '2026-08-31' }; } });
+  await waitFor(() => $('.kpi-row'));
+  assert.equal($$('.kpi-row > .card.kpi').length, 4);
+  assert.ok($$('.kpi-row > .card').every((c) => !c.getAttribute('style')), 'no per-box sizing');
+});
+
+test('Settings: no typed-in report name; the account shows the code parsed from PropReports', async () => {
+  const { $ } = await boot({}, { tab: 'settings' });
+  await waitFor(() => $('#acct-code'));
+  assert.equal($('#report-name'), null);
+  assert.equal(text($('#acct-code')), 'FPTI000645A404');
 });
 
 test('Settings: profit share defaults to the stored 50% and saves a new percentage once, from a chosen month', async () => {

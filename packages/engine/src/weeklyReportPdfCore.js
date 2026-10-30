@@ -17,6 +17,10 @@
 // alongside it in assets/fonts/) via @pdf-lib/fontkit instead, which
 // subsets proper Unicode glyphs and renders Δ correctly.
 
+// FONTS: the report is set in Arial. In the browser the user's own installed Arial is embedded when the
+// browser lets the page read installed fonts (Chrome / Edge, after a one-time permission prompt); otherwise
+// Liberation Sans — metrically identical to Arial, so every line breaks at the same place — is used.
+//
 // pdf-lib, fontkit and the font bytes are INJECTED so the exact same renderer runs in Node (tests) and in the browser.
 let PDFDocument, rgb, fontkit, COLOR;
 import {
@@ -89,7 +93,7 @@ export async function renderWeeklyReportPdfCore(report, deps) {
   COLOR = makeColors();
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  pdf.setTitle(`${report.accountName} — Weekly Trading Report — ${report.weekStart} to ${report.weekEnd}`);
+  pdf.setTitle(`${report.accountName || report.accountCode} — Weekly Trading Report — ${report.weekStart} to ${report.weekEnd}`);
   const page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
   const regular = await pdf.embedFont(deps.regularBytes, { subset: true });
@@ -101,7 +105,7 @@ export async function renderWeeklyReportPdfCore(report, deps) {
   // ---------------------------------------------------------------
   // Header block: name/account on the left, period/title on the right
   // ---------------------------------------------------------------
-  page.drawText(report.accountName, {
+  page.drawText(report.accountName || '', {
     x: MARGIN,
     y: fromTop(60),
     size: 24,
@@ -146,66 +150,49 @@ export async function renderWeeklyReportPdfCore(report, deps) {
   });
 
   // ---------------------------------------------------------------
-  // Day table: header bar + Total Δ row + Account value row
+  // Day table: header row + Total Δ row + Account value row.
+  // Everything 9 pt and centred; the first row and the first column bold.
   // ---------------------------------------------------------------
+  const TABLE_SIZE = 9;
   const LABEL_COL_WIDTH = 84;
   const dayColWidth = (CONTENT_WIDTH - LABEL_COL_WIDTH) / 5;
   const tableTop = 106;
-  const headerHeight = 26;
-  const rowHeight = 32;
+  const headerHeight = 24;
+  const rowHeight = 26;
+  const colX = (i) => MARGIN + (i === 0 ? 0 : LABEL_COL_WIDTH + (i - 1) * dayColWidth);
+  const colW = (i) => (i === 0 ? LABEL_COL_WIDTH : dayColWidth);
+  const mid = (top, height) => fromTop(top + height / 2 + TABLE_SIZE * 0.35);
 
-  // Header bar (blue, full width)
-  page.drawRectangle({
-    x: MARGIN,
-    y: fromTop(tableTop + headerHeight),
-    width: CONTENT_WIDTH,
-    height: headerHeight,
-    color: COLOR.blue,
-  });
-  const headerLabels = ['Day', ...report.days.map((d) => d.label)];
-  const headerBaseline = fromTop(tableTop + headerHeight / 2 + 4);
-  headerLabels.forEach((label, i) => {
-    const colX = MARGIN + (i === 0 ? 0 : LABEL_COL_WIDTH + (i - 1) * dayColWidth);
-    const colWidth = i === 0 ? LABEL_COL_WIDTH : dayColWidth;
-    if (i === 0) {
-      page.drawText(label, { x: colX + 10, y: headerBaseline, size: 11, font: bold, color: COLOR.white });
-    } else {
-      drawCenteredText(page, { font: bold, size: 11, color: COLOR.white, text: label, x: colX, width: colWidth, baselineY: headerBaseline });
-    }
+  page.drawRectangle({ x: MARGIN, y: fromTop(tableTop + headerHeight), width: CONTENT_WIDTH, height: headerHeight, color: COLOR.blue });
+  ['Day', ...report.days.map((d) => d.label)].forEach((label, i) => {
+    drawCenteredText(page, { font: bold, size: TABLE_SIZE, color: COLOR.white, text: label, x: colX(i), width: colW(i), baselineY: mid(tableTop, headerHeight) });
   });
 
-  // Total Δ row + Account value row
   const rows = [
     { label: 'Total Δ', values: report.days.map((d) => d.totalDelta), colorize: true },
     { label: 'Account value', values: report.days.map((d) => d.accountValue), colorize: false },
   ];
   rows.forEach((row, rowIndex) => {
     const rowTop = tableTop + headerHeight + rowIndex * rowHeight;
-    const baseline = fromTop(rowTop + rowHeight / 2 + 4);
-    page.drawText(row.label, { x: MARGIN + 8, y: baseline, size: 11, font: bold, color: COLOR.body });
+    drawCenteredText(page, { font: bold, size: TABLE_SIZE, color: COLOR.body, text: row.label, x: colX(0), width: colW(0), baselineY: mid(rowTop, rowHeight) });
     row.values.forEach((value, i) => {
-      const colX = MARGIN + LABEL_COL_WIDTH + i * dayColWidth;
-      const text = formatSignedParen(value);
       const color = row.colorize ? colorFor(signColor(value)) : COLOR.body;
-      drawCenteredText(page, { font: regular, size: 11, color, text, x: colX, width: dayColWidth, baselineY: baseline });
+      drawCenteredText(page, { font: regular, size: TABLE_SIZE, color, text: formatSignedParen(value), x: colX(i + 1), width: colW(i + 1), baselineY: mid(rowTop, rowHeight) });
     });
   });
 
-  // Grid lines for the day table (outer border + column dividers + row dividers)
   const tableBottom = tableTop + headerHeight + rowHeight * 2;
   strokeGrid(page, {
-    x: MARGIN,
-    topY: tableTop,
-    bottomY: tableBottom,
+    x: MARGIN, topY: tableTop, bottomY: tableBottom,
     colWidths: [LABEL_COL_WIDTH, ...Array(5).fill(dayColWidth)],
-    rowHeights: [headerHeight, rowHeight, rowHeight],
-    fromTop,
+    rowHeights: [headerHeight, rowHeight, rowHeight], fromTop,
   });
 
   // ---------------------------------------------------------------
-  // PERFORMANCE banner
+  // PERFORMANCE banner — set apart from the day table so it reads as its own table
   // ---------------------------------------------------------------
-  const bannerTop = tableBottom;
+  const TABLE_GAP = 16;
+  const bannerTop = tableBottom + TABLE_GAP;
   const bannerHeight = 26;
   page.drawRectangle({
     x: MARGIN,
@@ -260,7 +247,11 @@ export async function renderWeeklyReportPdfCore(report, deps) {
     color: COLOR.cardBg,
   });
 
+  // Labels 8 pt, figures 15 pt bold. Every figure in a row sits on the same line, even when a
+  // neighbouring label wraps onto two lines.
+  const LABEL_SIZE = 8, VALUE_SIZE = 15;
   cells.forEach((rowCells, rowIndex) => {
+    const rowLines = Math.max(...rowCells.map((c) => c.lines.length));
     rowCells.forEach((cell, colIndex) => {
       const cellX = MARGIN + colIndex * gridColWidth;
       const cellTop = gridTop + rowIndex * gridRowHeight;
@@ -269,16 +260,16 @@ export async function renderWeeklyReportPdfCore(report, deps) {
         page.drawText(line, {
           x: cellX + 12,
           y: labelBaseline - li * 10,
-          size: 8,
+          size: LABEL_SIZE,
           font: bold,
           color: COLOR.labelGray,
         });
       });
-      const valueBaseline = fromTop(cellTop + (cell.lines.length > 1 ? 44 : 38));
-      page.drawText(String(cell.value), {
+      const valueBaseline = fromTop(cellTop + (rowLines > 1 ? 45 : 40));
+      page.drawText(String(cell.value ?? ''), {
         x: cellX + 12,
         y: valueBaseline,
-        size: 15,
+        size: VALUE_SIZE,
         font: bold,
         color: cell.color,
       });
@@ -300,15 +291,15 @@ export async function renderWeeklyReportPdfCore(report, deps) {
   const commentTop = gridTop + gridRowHeight * 3 + 15;
   const commentLabelHeight = 20;
   const commentPadding = 10;
-  const commentFontSize = 10.5;
-  const commentLineHeight = 13;
-  const commentLines = wrapText(regular, report.weeklyComment || '', commentFontSize, CONTENT_WIDTH - commentPadding * 2);
+  const commentFontSize = 9;
+  const commentLineHeight = 11.5;
+  const commentLines = wrapText(bold, report.weeklyComment || '', commentFontSize, CONTENT_WIDTH - commentPadding * 2);
   const commentTextHeight = Math.max(commentLines.length, 1) * commentLineHeight + commentPadding * 2;
 
   page.drawText('COMMENT:', {
     x: MARGIN + 8,
-    y: fromTop(commentTop + commentLabelHeight / 2 + 4),
-    size: 10,
+    y: fromTop(commentTop + commentLabelHeight / 2 + 3),
+    size: 9,
     font: bold,
     color: COLOR.body,
   });
@@ -318,7 +309,7 @@ export async function renderWeeklyReportPdfCore(report, deps) {
       x: MARGIN + commentPadding,
       y: fromTop(commentTop + commentLabelHeight + commentPadding + (i + 1) * commentLineHeight - 3),
       size: commentFontSize,
-      font: regular,
+      font: bold,
       color: COLOR.body,
     });
   });

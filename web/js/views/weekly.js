@@ -4,7 +4,7 @@
 // never the trading data: DATABASE TRUTH (computed_data) and REPORT PRESENTATION EDITS stay separate.
 import { h, clear, money, loading, errorCard, toast, openModal, fmtDate } from '../lib.js';
 import { buildWeekInput, mondayOf, addDays } from '../engine/weekBuilder.js';
-import { assembleWeeklyReportData, buildWeeklyCommentDraft, applyManualOverrides } from '../engine/weeklyReport.js';
+import { assembleWeeklyReportData, buildWeeklyCommentDraft, applyManualOverrides, parseAccountLabel } from '../engine/weeklyReport.js';
 import { formatSignedParen } from '../engine/format.js';
 
 const num = (v) => { const t = String(v).trim().replace(/[()]/g, (c) => (c === '(' ? '-' : '')); if (t === '') return null; const n = Number(t); return Number.isFinite(n) ? n : null; };
@@ -16,16 +16,16 @@ export async function render(container, ctx) {
   const weekEnd = addDays(weekStart, 4);
   clear(container).append(loading('Calculating the week…'));
 
-  let snapshots, trades, comments, saved, settings;
+  let snapshots, trades, comments, saved;
   try {
-    [snapshots, trades, comments, saved, settings] = await Promise.all([
-      api.getSnapshots(), api.getClosedTrades(), api.getDailyComments(weekStart, addDays(weekStart, 6)), api.getWeeklyReport(state.account.id, weekStart), api.getSettings(),
+    [snapshots, trades, comments, saved] = await Promise.all([
+      api.getSnapshots(), api.getClosedTrades(), api.getDailyComments(weekStart, addDays(weekStart, 6)), api.getWeeklyReport(state.account.id, weekStart),
     ]);
   } catch (e) { clear(container).append(errorCard('The week could not be calculated. Your data is safe — try again.', e)); return; }
 
   const week = buildWeekInput({ weekStart, snapshots, closedTrades: trades, dailyComments: comments });
-  const accountName = settings?.report_display_name || state.account.propreports_account_name || 'Trader';
-  const accountCode = state.account.account_code || '';
+  // PropReports already labels the account "FPTI000645A404 Gabriela Nikolova": name and account come from there.
+  const { name: accountName, code: accountCode } = parseAccountLabel(state.account.account_code, state.account.propreports_account_name);
   const draft = buildWeeklyCommentDraft(week.commentDays);
 
   const picker = h('div', { class: 'row' },
@@ -40,13 +40,13 @@ export async function render(container, ctx) {
     h('div', { class: 'table-wrap' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, ''), week.days.map((d) => h('th', { class: 'num' }, d.label)))),
       h('tbody', {}, h('tr', {}, h('td', {}, 'Total Δ'), week.days.map((d) => h('td', { class: `num ${d.totalDelta < 0 ? 'neg' : d.totalDelta > 0 ? 'pos' : ''}` }, formatSignedParen(d.totalDelta)))),
         h('tr', {}, h('td', {}, 'Account value'), week.days.map((d) => h('td', { class: 'num' }, formatSignedParen(d.accountValue))))))),
-    h('div', { class: 'row', style: 'margin-top:.8rem' },
+    h('div', { class: 'grid kpi-row', style: 'margin-top:.8rem' },
       ...[['Total Δ (Weekly P&L)', `$${formatSignedParen(base.totals.totalDeltaWeeklyPnl)}`], ['Average daily Δ', formatSignedParen(base.totals.averageDailyDelta)], ['Up / down days', `${base.totals.upDays} / ${base.totals.downDays}`], ['Max drawdown', formatSignedParen(base.totals.maxDrawdown)]]
-        .map(([k, v]) => h('div', { class: 'card kpi', style: 'flex:1;min-width:150px' }, h('div', { class: 'label' }, k), h('div', { class: 'value' }, v)))),
+        .map(([k, v]) => h('div', { class: 'card kpi' }, h('div', { class: 'label' }, k), h('div', { class: 'value' }, v)))),
     h('div', { class: 'muted', style: 'font-size:.8rem;margin-top:.5rem' }, 'The Total Δ row leaves out the market-data / platform / multisport fees that post on the 1st of the month; account value includes them.'),
     h('div', { class: 'row', style: 'margin-top:1rem' },
-      h('button', { class: 'btn primary big', id: 'generate-btn', onclick: () => askComment(saved?.weekly_comment ?? draft) }, 'Generate report…'),
-      saved ? h('button', { class: 'btn big', onclick: () => showReport(saved.weekly_comment ?? '', saved.manual_overrides) }, 'Open saved draft') : null));
+      h('button', { class: 'btn primary big', id: 'generate-btn', onclick: () => { ctx.pdf.prepareFonts?.(); askComment(saved?.weekly_comment ?? draft); } }, 'Generate report…'),
+      saved ? h('button', { class: 'btn big', onclick: () => { ctx.pdf.prepareFonts?.(); showReport(saved.weekly_comment ?? '', saved.manual_overrides); } }, 'Open saved draft') : null));
 
   const stage = h('div', {});
   clear(container).append(h('div', { class: 'row between' }, h('h1', {}, 'Weekly report'), picker), summary, stage);
@@ -63,6 +63,7 @@ export async function render(container, ctx) {
   async function showReport(comment, overrides) {
     const root = baseFor(comment);
     const edit = structuredClone({ accountName: root.accountName, accountCode: root.accountCode, days: root.days, totals: root.totals, propReportsNative: root.propReportsNative, weeklyComment: comment, ...(overrides ?? {}) });
+    if (/\s/.test(edit.accountCode ?? '')) Object.assign(edit, (({ code, name }) => ({ accountCode: code, accountName: edit.accountName || name }))(parseAccountLabel(edit.accountCode))); // drafts saved before the name was split out
     let blobUrl = null, bytes = null, timer = null;
     const frame = h('iframe', { class: 'pdf-frame', title: 'Report preview' });
     const status = h('div', { class: 'muted' }, '');
@@ -74,7 +75,7 @@ export async function render(container, ctx) {
         bytes = await ctx.pdf.render(current());
         if (blobUrl) URL.revokeObjectURL(blobUrl);
         blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-        frame.src = blobUrl; clear(status).append('Preview is up to date.');
+        frame.src = blobUrl; clear(status).append(`Preview is up to date.${ctx.pdf.fontName ? ` Font: ${ctx.pdf.fontName}.` : ''}`);
       } catch (e) { clear(status).append(errorCard('The preview could not be drawn.', e)); }
     };
     const schedule = () => { clearTimeout(timer); timer = setTimeout(refreshPreview, 450); };
@@ -110,7 +111,7 @@ export async function render(container, ctx) {
           catch (e) { toast('Could not save the draft.', 'error'); console.error(e); } } }, 'Save draft'),
         h('button', { class: 'btn primary big', id: 'download-pdf', onclick: async () => {
           await refreshPreview(); if (!bytes) return;
-          const a = h('a', { href: blobUrl, download: `Weekly-Report-${edit.accountName.replace(/\s+/g, '-')}-${weekStart}.pdf` }); document.body.append(a); a.click(); a.remove();
+          const a = h('a', { href: blobUrl, download: `Weekly-Report-${(edit.accountName || edit.accountCode || 'Account').replace(/\s+/g, '-')}-${weekStart}.pdf` }); document.body.append(a); a.click(); a.remove();
           api.saveWeeklyReport({ prop_account_id: state.account.id, user_id: state.userId, week_start_date: weekStart, week_end_date: weekEnd, computed_data: root, weekly_comment: edit.weeklyComment, manual_overrides: edit, status: 'finalized', pdf_generated_at: new Date().toISOString(), finalized_at: new Date().toISOString() }).catch(console.error);
         } }, 'Download PDF')),
       status);

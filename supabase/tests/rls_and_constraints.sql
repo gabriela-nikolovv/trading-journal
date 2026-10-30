@@ -84,3 +84,17 @@ insert into daily_comments (prop_account_id, user_id, trade_date, comment)
 values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', '2026-09-01', 'A second comment, same day');
 reset role;
 
+
+-- 8) 0007 tables: per-symbol day results and position lots are private to their owner.
+\echo '[8] daily_symbol_pnl + position_lots — Gabi sees 1 of each, user B sees 0'
+grant select, insert, update, delete on all tables in schema public to authenticated;
+insert into daily_symbol_pnl (prop_account_id, user_id, trade_date, symbol, unrealized_delta)
+values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', '2026-09-02', 'AAPL', 12.5);
+insert into position_lots (position_instance_id, user_id, label, entry_keys, original_stop, current_stop)
+select id, user_id, 'Lot 1', array['k'], 140, 155 from position_instances where user_id = '11111111-1111-1111-1111-111111111111' limit 1;
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+select 'gabi' as who, (select count(*) from daily_symbol_pnl) as symbol_days, (select count(*) from position_lots) as lots;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select 'user B' as who, (select count(*) from daily_symbol_pnl) as symbol_days, (select count(*) from position_lots) as lots;
+reset role;

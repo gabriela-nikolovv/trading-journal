@@ -1,25 +1,27 @@
 // Settings (spec section 41): connection, sync status + reconciliation warnings, profit share,
 // report name, market-data / TradingView status, preferences, sign-out.
 import { h, clear, loading, errorCard, toast, fmtDate, SCHEMA_LABELS } from '../lib.js';
+import { parseAccountLabel } from '../engine/weeklyReport.js';
 
 export async function render(container, ctx) {
   const { api, state } = ctx;
   clear(container).append(loading('Loading settings…'));
-  let status, schedule, settings;
-  try { [status, schedule, settings] = await Promise.all([api.getSyncStatus(state.account.id), api.getProfitShareSchedule(), api.getSettings()]); }
+  let status, schedule;
+  try { [status, schedule] = await Promise.all([api.getSyncStatus(state.account.id), api.getProfitShareSchedule()]); }
   catch (e) { clear(container).append(errorCard('Settings could not be loaded.', e)); return; }
 
   const a = state.account, st = status.state, run = status.lastRun;
   const current = [...schedule].sort((x, y) => y.effectiveFrom.localeCompare(x.effectiveFrom))[0];
   const pctInput = h('input', { id: 'pct-input', type: 'number', min: '0', max: '100', step: '0.5', value: current?.pct ?? 50, style: 'width:100px' });
   const fromInput = h('input', { id: 'pct-from', type: 'date', value: new Date().toISOString().slice(0, 7) + '-01' });
-  const nameInput = h('input', { id: 'report-name', value: settings?.report_display_name ?? '', placeholder: a.propreports_account_name ?? 'Your name' });
+  const acct = parseAccountLabel(a.account_code, a.propreports_account_name);
   const warnings = Array.isArray(run?.warnings) ? run.warnings : [];
   const test = (label, fn) => { const out = h('span', { class: 'muted' }, ''); return h('div', { class: 'row' }, h('button', { class: 'btn', onclick: async () => { clear(out).append('Checking…'); try { clear(out).append(await fn()); } catch (e) { clear(out).append(e.message); } } }, label), out); };
 
   clear(container).append(h('h1', {}, 'Settings'),
     h('div', { class: 'card' }, h('h2', {}, 'PropReports connection'),
-      h('p', {}, 'Account: ', h('b', {}, a.account_code || a.propreports_account_name || '—'), h('span', { class: 'muted' }, ` · PropReports account id ${a.propreports_account_id} · ${a.prop_firm} / ${a.platform}`)),
+      h('p', {}, 'Account: ', h('b', { id: 'acct-code' }, acct.code || '—'), acct.name ? ` · ${acct.name}` : '', h('span', { class: 'muted' }, ` · PropReports account id ${a.propreports_account_id} · ${a.prop_firm} / ${a.platform}`)),
+      h('p', { class: 'muted' }, 'The weekly report takes the name and the account from this PropReports label automatically.'),
       h('p', { class: 'muted' }, 'The API token lives only on the server (Supabase secret). It is never shown here and never reaches your browser.'),
       test('Test the connection', async () => { const r = await api.setupAccount(); return `Connected ✔ (account ${r.propAccountId ? 'found' : 'ok'})`; })),
     h('div', { class: 'card' }, h('h2', {}, 'Synchronization'),
@@ -36,9 +38,6 @@ export async function render(container, ctx) {
           const from = fromInput.value.slice(0, 7) + '-01';
           try { await api.saveProfitShare(state.userId, v, from); state.schedule = await api.getProfitShareSchedule(); toast('Profit share saved.'); render(container, ctx); } catch (e) { toast('Could not save.', 'error'); console.error(e); } } }, 'Save')),
       h('div', { class: 'muted', style: 'margin-top:.5rem' }, 'History: ', schedule.map((s) => `${s.pct}% from ${fmtDate(s.effectiveFrom)}`).join(' · '))),
-    h('div', { class: 'card' }, h('h2', {}, 'Weekly report'),
-      h('label', { class: 'field' }, 'Name printed on the report', nameInput),
-      h('button', { class: 'btn primary', onclick: async () => { try { await api.saveSettings(state.userId, { report_display_name: nameInput.value.trim() || null }); toast('Saved.'); } catch (e) { toast('Could not save.', 'error'); console.error(e); } } }, 'Save')),
     h('div', { class: 'card' }, h('h2', {}, 'Market data and classification'),
       test('Test the price provider (Yahoo Finance)', async () => { const r = await api.getQuotes(['AAPL']); const q = r.quotes.AAPL; return q.ok ? `Working ✔ AAPL ${q.price} (${q.session}, ${q.asOf})` : `Not available: ${q.reason}`; }),
       h('div', { style: 'height:.5rem' }),

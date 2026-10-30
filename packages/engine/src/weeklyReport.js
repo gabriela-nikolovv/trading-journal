@@ -102,3 +102,25 @@ export function applyManualOverrides(baseData, overrides = {}) {
     days: overrides.days ?? baseData.days,
   };
 }
+
+/**
+ * PropReports labels the account as e.g. "FPTI000645A404 Gabriela Nikolova" (and some screens prefix
+ * "Account: "). Splits that into the account code and the trader's name, so the report never needs the
+ * name typed in. Takes every label PropReports gave (display name, trading identifier) and uses the
+ * first that contains a code; a label that is only a code supplies the code.
+ * @param {...(string|null|undefined)} labels
+ * @returns {{code:string, name:string}}
+ */
+export function parseAccountLabel(...labels) {
+  let code = '', name = '';
+  for (const raw of labels) {
+    const t = String(raw ?? '').replace(/^\s*account\s*:\s*/i, '').trim();
+    if (!t) continue;
+    const m = /^([A-Za-z0-9][A-Za-z0-9_-]*\d[A-Za-z0-9_-]*)(?:\s+(.+))?$/.exec(t);
+    if (m) {
+      if (!code) code = m[1];
+      if (!name && m[2] && /[A-Za-z]/.test(m[2])) name = m[2].trim();
+    } else if (!name && /[A-Za-z]/.test(t)) name = t;
+  }
+  return { code, name };
+}

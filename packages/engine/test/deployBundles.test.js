@@ -35,6 +35,6 @@ test('Website bundle is self-contained and contains every module the views impor
   checkBundle('web', files, ['weekBuilder', 'weeklyReport', 'weeklyReportPdfCore', 'calendar', 'schemaSeries', 'statistics', 'positionAnalytics', 'taxonomy', 'tradeStats', 'format']);
   // and every ./engine/x.js the web code imports is shipped
   const webJs = ['app', 'api', 'lib', 'pdf', 'main'].map((f) => readFileSync(join(root, 'web', 'js', `${f}.js`), 'utf8'))
-    .concat(['dashboard', 'positions', 'calendar', 'trades', 'weekly', 'settings', 'charts'].map((f) => readFileSync(join(root, 'web', 'js', 'views', `${f}.js`), 'utf8')));
+    .concat(['dashboard', 'positions', 'calendar', 'trades', 'weekly', 'settings', 'charts', 'home'].map((f) => readFileSync(join(root, 'web', 'js', 'views', `${f}.js`), 'utf8')));
   for (const code of webJs) for (const m of code.matchAll(/engine\/([A-Za-z0-9]+)\.js/g)) assert.ok(files.includes(m[1]), `web imports engine/${m[1]}.js which is not copied`);
 });
