@@ -6,7 +6,6 @@ import { buildCalendarMonth, summarizePeriod, aggregateSeries } from '../engine/
 import { resolvePctForMonth } from '../engine/pnlSchemas.js';
 import { dailySeries } from '../engine/schemaSeries.js';
 import { computeTradeStats } from '../engine/tradeStats.js';
-import { totalFees } from '../engine/dailySnapshots.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const HEADS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']; // never Sunday-first
@@ -139,47 +138,39 @@ async function dayPanel(date, ctx, cal, comments, snapshots, rerender) {
     const opened = day(p.openedAt) === date, closed = day(p.closedAt) === date;
     const status = opened && closed ? 'Opened & closed' : opened ? 'Opened' : closed ? 'Closed' : 'Held';
     const prev = bySymbol.get(p.symbol);
-    bySymbol.set(p.symbol, { symbol: p.symbol, direction: p.direction, status: prev ? `${prev.status} · ${status}` : status, realizedIfClosed: closed ? (prev?.realizedIfClosed ?? 0) + p.realizedPnl : prev?.realizedIfClosed ?? null });
+    bySymbol.set(p.symbol, { symbol: p.symbol, direction: p.direction, status: prev ? `${prev.status} · ${status}` : status, realizedIfClosed: closed ? (prev?.realizedIfClosed ?? 0) + p.realizedPnl - (p.feesAllocated ?? 0) : prev?.realizedIfClosed ?? null });
   }
   for (const s of symbolDays) {
     const x = bySymbol.get(s.symbol) ?? { symbol: s.symbol, direction: null, status: s.quantityTraded ? 'Traded' : 'Held' };
     bySymbol.set(s.symbol, { ...x, pr: s });
   }
-  // Each stock's day in the selected P&L type: Pure trading = realized + change in unrealized;
-  // Total = that minus the stock's own trade fees. Anything not tied to a stock (monthly fees) gets its
-  // own line, so the rows always add up to the day's number in the calendar.
-  const net = state.schema === 'schema1';
+  // Each stock's day, exactly as PropReports' Totals by Date shows it: Realized = Net (its trade fees
+  // already taken off), Unrealized Δ, Total = Total Δ (Net + Unrealized Δ). Same in Total and Pure
+  // trading. The "Fee: …" rows (daily interest, market data, platform, misc) are not booked to a stock:
+  // in Total they are the "Other (fees)" line, in Pure trading they are left out.
   const list = [...bySymbol.values()].map((x) => {
-    const realized = x.pr ? x.pr.realized : x.realizedIfClosed;
+    const realized = x.pr ? x.pr.realized - x.pr.tradeCosts : x.realizedIfClosed;
     const unreal = x.pr ? x.pr.unrealizedDelta : null;
-    const fees = x.pr ? x.pr.tradeCosts : 0;
-    const gross = realized === null && unreal === null ? null : (realized ?? 0) + (unreal ?? 0);
-    return { ...x, realized, unreal, fees, result: gross === null ? null : Math.round((net ? gross - fees : gross) * 100) / 100, traded: x.pr?.quantityTraded ?? null };
+    const total = realized === null && unreal === null ? null : (realized ?? 0) + (unreal ?? 0);
+    return { ...x, realized, unreal, result: total, traded: x.pr?.quantityTraded ?? null };
   }).sort((a, b) => Math.abs(b.result ?? 0) - Math.abs(a.result ?? 0));
   const dayValue = cell?.delta ?? null;
+  // Unrounded sums: rounding each row first left a phantom 0.01 "Other" on 30 Oct.
   const stocksSum = list.reduce((a, x) => a + (x.result ?? 0), 0);
   const rest = dayValue === null ? 0 : Math.round((dayValue - stocksSum) * 100) / 100;
 
   const snap = snapshots.find((x) => x.date === date);
-  const line = (label, v, { bold = false, neg = false } = {}) => {
-    const val = neg ? -v : v;
-    const cellV = h('td', { class: `num ${signClass(val)}` }, money(val));
-    return h('tr', {}, h('td', {}, bold ? h('b', {}, label) : label), bold ? h('td', { class: `num ${signClass(val)}` }, h('b', {}, money(val))) : cellV);
-  };
-  const breakdown = snap ? h('div', { class: 'table-wrap' }, h('table', { class: 'breakdown' }, h('tbody', {},
-    line('Trading result (realized + change in unrealized)', snap.schema3Delta),
-    line('Fees', totalFees(snap), { neg: true }),
-    line('Total Δ', snap.schema1Delta, { bold: true }),
-    snap.transfers ? line('Deposits / withdrawals (not P&L)', snap.transfers) : null))) : null;
+  const breakdown = snap?.transfers ? h('div', { class: 'table-wrap' }, h('table', { class: 'breakdown' }, h('tbody', {},
+    h('tr', {}, h('td', {}, 'Deposits / withdrawals (not P&L)'), h('td', { class: `num ${signClass(snap.transfers)}` }, money(snap.transfers)))))) : null;
 
   const comment = comments.find((c) => c.date === date)?.comment ?? '';
   const box = h('textarea', { id: 'day-comment', placeholder: 'What happened today? This is suggested automatically when you build the weekly report.' }, comment);
   const STATUS_CLASS = { Opened: 'info', Closed: 'closed', Held: 'held', 'Opened & closed': 'closed', Traded: 'info' };
   return h('div', { class: 'card', id: 'day-panel' },
     h('div', { class: 'row between' }, h('h2', {}, fmtDate(date)), h('div', {}, `${SCHEMA_SHORT[state.schema]}: `, h('b', { class: signClass(cell?.delta) }, cell?.delta === null || cell?.delta === undefined ? 'no trading data' : money(cell.delta)))),
-    list.length
+    list.length || Math.abs(rest) >= 0.01
       ? h('div', { class: 'table-wrap' }, h('table', { id: 'day-positions' },
-        h('thead', {}, h('tr', {}, ['Symbol', 'Direction', 'That day', 'Shares traded', 'Realized', 'Unrealized Δ', ...(net ? ['Fees'] : []), SCHEMA_SHORT[state.schema]].map((t, i) => h('th', { class: i > 2 ? 'num' : '' }, t)))),
+        h('thead', {}, h('tr', {}, ['Symbol', 'Direction', 'That day', 'Shares traded', 'Realized', 'Unrealized Δ', SCHEMA_SHORT[state.schema]].map((t, i) => h('th', { class: i > 2 ? 'num' : '' }, t)))),
         h('tbody', {}, list.map((t) => h('tr', {},
           h('td', {}, h('b', {}, t.symbol)),
           h('td', {}, t.direction ? h('span', { class: `badge ${t.direction}` }, t.direction.toUpperCase()) : '—'),
@@ -187,10 +178,9 @@ async function dayPanel(date, ctx, cal, comments, snapshots, rerender) {
           h('td', { class: 'num' }, !t.traded ? '—' : Math.round(t.traded)),
           h('td', { class: `num ${signClass(t.realized)}` }, t.realized === null ? '—' : money(t.realized)),
           h('td', { class: `num ${signClass(t.unreal)}` }, t.unreal === null ? '—' : money(t.unreal)),
-          net ? h('td', { class: 'num' }, t.fees ? money(-t.fees) : '—') : null,
           h('td', { class: `num ${signClass(t.result)}` }, h('b', {}, t.result === null ? '—' : money(t.result))))),
-          Math.abs(rest) >= 0.01 ? h('tr', { class: 'day-rest' }, h('td', { colspan: net ? 7 : 6 }, 'Other — not booked to a stock (e.g. monthly fees)'), h('td', { class: `num ${signClass(rest)}` }, money(rest))) : null,
-          dayValue !== null ? h('tr', { class: 'day-sum' }, h('td', { colspan: net ? 7 : 6 }, h('b', {}, `Day ${SCHEMA_SHORT[state.schema]}`)), h('td', { class: `num ${signClass(dayValue)}` }, h('b', {}, money(dayValue)))) : null)))
+          Math.abs(rest) >= 0.01 ? h('tr', { class: 'day-rest' }, h('td', { colspan: 6 }, 'Other (fees)'), h('td', { class: `num ${signClass(rest)}` }, money(rest))) : null,
+          dayValue !== null ? h('tr', { class: 'day-sum' }, h('td', { colspan: 6 }, h('b', {}, `Day ${SCHEMA_SHORT[state.schema]}`)), h('td', { class: `num ${signClass(dayValue)}` }, h('b', {}, money(dayValue)))) : null)))
       : h('div', { class: 'muted' }, 'No positions were open on this day.'),
     h('div', { class: 'muted', style: 'font-size:.78rem;margin:.3rem 0 .6rem' }, '“Held” = carried overnight with no trade that day; its result is the change in its unrealized P&L.'),
     breakdown,

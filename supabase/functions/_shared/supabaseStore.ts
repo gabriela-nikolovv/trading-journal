@@ -3,6 +3,7 @@
 // NOT YET RUN against a live project (the build sandbox has no network access
 // to Supabase); the SQL it calls (apply_sync_batch) IS tested against Postgres.
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { tradeFeeTotal, hasTradeFeeColumns } from './engine/csv.js';
 
 const PAGE = 1000; // PostgREST returns at most 1000 rows per request
 
@@ -56,7 +57,11 @@ export function createSupabaseStore(db: SupabaseClient, propAccountId: string) {
       const rows = await selectAll<any>((a, b) => db.from('raw_fills').select('*').eq('prop_account_id', propAccountId).eq('is_superseded', false).order('datetime').range(a, b));
       return rows.map((r) => ({
         id: r.id, symbol: r.symbol, datetime: new Date(r.datetime), side: r.side, quantity: Number(r.quantity), price: Number(r.price),
-        totalFee: ['comm', 'ecn_fee', 'sec_fee', 'taf_fee', 'nscc_fee', 'clr_fee', 'misc_fee'].reduce((s, k) => s + Number(r[k]), 0),
+        // Every fee column of the ORIGINAL PropReports row (raw_json): the seven stored columns miss CAT /
+        // ORF / NFA / ACC, and rows synced before this fix stored ECN Fee as 0 (header case mismatch).
+        totalFee: r.raw_json && hasTradeFeeColumns(r.raw_json)
+          ? tradeFeeTotal(r.raw_json)
+          : ['comm', 'ecn_fee', 'sec_fee', 'taf_fee', 'nscc_fee', 'clr_fee', 'misc_fee'].reduce((s, k) => s + Number(r[k]), 0),
         multiplier: Number(r.multiplier ?? 1), currency: r.currency ?? 'USD',
       }));
     },

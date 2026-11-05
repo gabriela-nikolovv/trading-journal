@@ -78,8 +78,9 @@ function parseRows(text) {
  * @param {string|undefined} raw
  */
 export function toNumber(raw) {
-  if (raw === undefined || raw === null || raw.trim() === '') return 0;
-  const trimmed = raw.trim();
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+  if (raw === undefined || raw === null || String(raw).trim() === '') return 0;
+  const trimmed = String(raw).trim();
   const parenNegative = /^\((.*)\)$/.exec(trimmed);
   const cleaned = (parenNegative ? parenNegative[1] : trimmed).replace(/,/g, '');
   const value = Number(cleaned);
@@ -99,4 +100,37 @@ export function readOptional(row, candidates) {
     if (row[key] !== undefined && row[key] !== '') return row[key];
   }
   return undefined;
+}
+
+// ---- Trade fee columns ------------------------------------------------------
+// PropReports writes its fee columns as "Comm, ECN Fee, SEC, CLR, CAT, TAF, NSCC, NFA, ORF, MISC, ACC"
+// (see the Totals by Date / Trades exports). The old code looked for 'Ecn Fee', 'Clr', 'Misc' with exact
+// case, so the ECN fee (and CLR / MISC / ACC when non-zero) was silently read as 0 — that is the
+// 2–13 cent gap per symbol. Headers are now matched ignoring case, spaces and punctuation.
+const headerKey = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+const TRADE_FEE_KEYS = new Set(['comm', 'ecnfee', 'ecn', 'sec', 'taf', 'nscc', 'clr', 'cat', 'nfa', 'orf', 'misc', 'acc', 'access', 'ftt']);
+
+/** Read a column by name ignoring case / spaces / punctuation ("ECN Fee" = "Ecn Fee" = "ecnFee"). */
+export function readColumn(row, names) {
+  const wanted = new Set(names.map(headerKey));
+  for (const k of Object.keys(row ?? {})) if (wanted.has(headerKey(k)) && row[k] !== '' && row[k] !== undefined && row[k] !== null) return row[k];
+  return undefined;
+}
+
+/** True when the row carries at least one per-execution fee column. */
+export function hasTradeFeeColumns(row) {
+  return Object.keys(row ?? {}).some((k) => TRADE_FEE_KEYS.has(headerKey(k)));
+}
+
+/** Σ of every per-execution fee column on the row (rebates are negative), each column counted once. */
+export function tradeFeeTotal(row) {
+  const seen = new Set();
+  let total = 0;
+  for (const [k, v] of Object.entries(row ?? {})) {
+    const key = headerKey(k);
+    if (!TRADE_FEE_KEYS.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    total += toNumber(v);
+  }
+  return total;
 }

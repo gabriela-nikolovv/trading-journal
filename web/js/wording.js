@@ -11,7 +11,7 @@ export const PNL_TYPES = [
 // Shown only in Settings → "P&L types".
 export const PNL_EXPLAIN = {
   schema1: 'PropReports’ Total Δ: the trading result minus every fee (trade fees, market data, platform and other monthly fees), each fee counted once. This is what your account value moves by.',
-  schema3: 'The trading result only — realized P&L plus the change in unrealized P&L — before any fee and before the profit share. How the trades themselves performed.',
+  schema3: 'The trading result only — each stock’s Net (its own trade fees taken off) plus the change in unrealized P&L — leaving out the “Fee: …” rows (daily interest, market data, platform, misc) and the profit share. How the trades themselves performed.',
   schema2: 'Total after the prop firm’s profit share. The share is taken once a month, on the last day, and only when the month is positive, so it is shown by month and by year only. Per-trade statistics use Total when After Share is selected.',
 };
 

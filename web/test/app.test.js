@@ -82,7 +82,9 @@ test('Dashboard: the P&L type switch changes the numbers; account value is PropR
   const kpis = () => Object.fromEntries($$('.kpi').map((k) => [text(k.querySelector('.label')), text(k.querySelector('.value'))]));
   assert.equal(kpis()['Account value'], '($646.46)');
   assert.ok(!('Open exposure' in kpis()));
-  assert.equal(kpis()['Total P&L · all time'], '($9.39)');            // 41.56 trading − 50.95 monthly fees
+  // Total · all time = PropReports Cash + Unrealized − deposits (the fake account's balance; its one stored
+  // week alone adds up to (9.39), because this fixture's chain starts at −637.07, not at 0)
+  assert.equal(kpis()['Total P&L · all time'], '($646.46)');
   const sel = $('select[aria-label="P&L type"]');
   sel.value = 'schema3'; sel.dispatchEvent(new window.Event('change'));
   await tick(80);
@@ -269,14 +271,13 @@ test('Calendar day: every stock open that day (held overnight too) in the SELECT
   const panel = await waitFor(() => $('#day-panel'));
   await waitFor(() => $('#day-positions'));
   const heads = [...$('#day-positions').querySelectorAll('thead th')].map(text);
-  assert.deepEqual(heads, ['Symbol', 'Direction', 'That day', 'Shares traded', 'Realized', 'Unrealized Δ', 'Fees', 'Total']);
+  assert.deepEqual(heads, ['Symbol', 'Direction', 'That day', 'Shares traded', 'Realized', 'Unrealized Δ', 'Total']);
   const rows = [...$('#day-positions').querySelectorAll('tbody tr')].map(text);
   assert.ok(rows.some((r) => /HOLD/.test(r) && /Held/.test(r) && /25\.24/.test(r)), rows.join(' | '));
   assert.ok(rows.some((r) => /WIN/.test(r) && /Closed/.test(r) && /23\.18/.test(r) && /\(2\.00\)/.test(r) && /21\.18/.test(r)), rows.join(' | '));
   assert.match(rows.at(-1), /Day Total\s*46\.42/);
-  assert.ok(!rows.some((r) => /not booked to a stock/.test(r)), 'stocks add up to the day');
-  const lines = [...panel.querySelectorAll('table.breakdown tr')].map((tr) => text(tr.firstChild));
-  assert.deepEqual(lines, ['Trading result (realized + change in unrealized)', 'Fees', 'Total Δ']);
+  assert.ok(!rows.some((r) => /Other/.test(r)), 'stocks add up to the day');
+  assert.equal(panel.querySelector('table.breakdown'), null, 'no Trading result / Fees / Total Δ rows');
   assert.equal($('#day-comment').value, 'Waited for the right entry.');
   $('#day-comment').value = 'Updated note';
   [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Save comment').click();
@@ -377,4 +378,69 @@ test('errors are friendly: a failing page shows a plain message, not a stack tra
   const err = await waitFor(() => $('.notice.error'));
   assert.match(err.textContent, /could not be loaded/);
   assert.ok(!/db\.js/.test(document.body.textContent));
+});
+
+// ---------- the user's REAL days, 19 Oct – 4 Nov 2026 (PropReports exports) ----------
+import fs from 'node:fs';
+import { buildDailySnapshots } from '../../packages/engine/src/dailySnapshots.js';
+const RF = JSON.parse(fs.readFileSync(new URL('../../packages/engine/test/fixtures/gabriela-2026-10-19-to-11-04.json', import.meta.url), 'utf8'));
+const realSnap = buildDailySnapshots({
+  positionRows: RF.days.flatMap((d) => d.symbols.map((x) => ({ Date: d.date, Symbol: x.symbol, Realized: String(x.gross), 'Unrealized Delta': String(x.unrealizedDelta), 'Qty Traded': String(x.qty), ...x.fees }))),
+  adjustments: RF.days.flatMap((d) => d.fees.map((f) => ({ date: d.date, categoryName: f.name, amount: f.amount, categoryType: 'fee' }))),
+  startingAccountValue: 0,
+});
+const realApi = {
+  getSnapshots: async () => realSnap.rows.map((r) => ({ ...r, date: r.tradeDate })),
+  getPositionsOnDay: async () => [],
+  getSymbolDays: async (from) => realSnap.symbolRows.filter((x) => x.tradeDate === from).map((x) => ({ date: x.tradeDate, symbol: x.symbol, realized: x.realized, unrealizedDelta: x.unrealizedDelta, tradeCosts: x.tradeCosts, quantityTraded: x.quantityTraded })),
+  getDailyComments: async () => [],
+};
+async function openRealDay(date, schema = 'schema1') {
+  const [y, m] = date.split('-').map(Number);
+  const b = await boot(realApi, { tab: 'calendar', before: (c) => { c.state.schema = schema; c.state.cal = { year: y, month: m, selected: date, view: 'days' }; } });
+  await waitFor(() => b.$('#day-positions'));
+  const rows = [...b.$('#day-positions').querySelectorAll('tbody tr')].map(text);
+  return { ...b, rows, row: (sym) => rows.find((r) => r.startsWith(sym)) };
+}
+
+test('REAL 30 Oct, Total: Realized = Net, Total = Total Δ, no phantom Other, Day Total (14.52)', async () => {
+  const { rows, row } = await openRealDay('2026-10-30');
+  assert.match(row('MDLZ'), /\(11\.18\)\s*0\.00\s*\(11\.18\)$/);
+  assert.match(row('AZN'), /10\.51\s*0\.00\s*10\.51$/);
+  assert.match(row('DOCS'), /\(0\.58\)\s*\(7\.95\)\s*\(8\.53\)$/);
+  assert.match(row('CDNA'), /\(5\.32\)\s*0\.00\s*\(5\.32\)$/);
+  assert.ok(!rows.some((r) => /Other/.test(r)), rows.join(' | '));
+  assert.match(rows.at(-1), /Day Total\s*\(14\.52\)/);
+});
+
+test('REAL 20 Oct, Total: ARM (5.14), Other (fees) = Daily Interest (0.03), Day Total (0.93)', async () => {
+  const { rows, row } = await openRealDay('2026-10-20');
+  assert.match(row('ARM'), /\(5\.14\)\s*0\.00\s*\(5\.14\)$/);
+  assert.match(rows.find((r) => r.startsWith('Other')), /^Other \(fees\)\s*\(0\.03\)$/);
+  assert.match(rows.at(-1), /Day Total\s*\(0\.93\)/);
+});
+
+test('REAL 29 Oct and 1 Nov, Total: Day Total (7.26) and (50.95) — a fee-only day still shows its table', async () => {
+  const a = await openRealDay('2026-10-29');
+  assert.match(a.rows.at(-1), /Day Total\s*\(7\.26\)/);
+  assert.match(a.rows.find((r) => r.startsWith('Other')), /\(0\.06\)$/);
+  const b = await openRealDay('2026-11-01');
+  assert.equal(b.rows.length, 2);
+  assert.match(b.rows[0], /^Other \(fees\)\s*\(50\.95\)$/);
+  assert.match(b.rows[1], /^Day Total\s*\(50\.95\)$/);
+});
+
+test('REAL days, Pure trading: same stock rows, the Fee: rows left out (29 Oct (7.20), 28 Oct 22.14 without Fee: Misc, 1 Nov 0.00)', async () => {
+  const a = await openRealDay('2026-10-29', 'schema3');
+  assert.match(a.row('GEN'), /9\.99\s*0\.00\s*9\.99$/);
+  assert.ok(!a.rows.some((r) => /Other/.test(r)));
+  assert.match(a.rows.at(-1), /Day Pure trading\s*\(7\.20\)/);
+  const b = await openRealDay('2026-10-28', 'schema3');
+  assert.match(b.rows.at(-1), /Day Pure trading\s*22\.14/);
+});
+
+test('REAL account: Dashboard Total · all time = PropReports balance (1,008.43)', async () => {
+  const { $$ } = await boot({ ...realApi, getClosedTrades: async () => [], getSyncStatus: async () => ({ state: { status: 'idle', last_success_at: '2026-11-04T20:00:00Z', account_cash: -1008.4298, account_unrealized: 0 }, lastRun: null }) });
+  const kpis = Object.fromEntries($$('.kpi').map((k) => [text(k.querySelector('.label')), text(k.querySelector('.value'))]));
+  assert.equal(kpis['Total P&L · all time'], '($1,008.43)');
 });

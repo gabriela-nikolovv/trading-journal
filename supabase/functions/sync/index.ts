@@ -53,6 +53,8 @@ Deno.serve(async (req) => {
     const store = createSupabaseStore(db, acct.id);
     const today = new Date().toISOString().slice(0, 10);
     const result = await runSync({ client: pr, store, today, token, forceFull: full });
+    // Column names PropReports sent (no values, no token): Supabase → Edge Functions → sync → Logs.
+    if (result.ok) console.info('sync diagnostics:', JSON.stringify((result as any).diagnostics));
     return json(result, result.ok ? 200 : 502);
   } catch (e) {
     console.error('sync handler error:', redactToken((e as Error).message, token)); // never log the token

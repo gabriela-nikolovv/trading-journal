@@ -2,6 +2,22 @@
 
 **START HERE → `SETUP-GUIDE.md`** (step-by-step, no terminal needed).
 
+## Fix — 5 Nov 2026 (numbers checked against PropReports, 19 Oct – 4 Nov)
+
+- **Cause of the cent differences:** PropReports names the column **"ECN Fee"** (also CLR, MISC, ACC); the
+  app looked for "Ecn Fee" / "Clr" / "Misc" with exact case, so the ECN fee was read as 0. Fee columns are now
+  matched ignoring case (`csv.js` → `tradeFeeTotal`), in the positions rows and the fills.
+- **Per stock = PropReports Totals by Date:** Realized = **Net**, Unrealized Δ, Total = **Total Δ**. No Fees column.
+  The "Fee: …" rows (Daily Interest, Misc, Market Data, Platform) are one **Other (fees)** line.
+- **Total** = PropReports Day Total Δ. **Pure trading** = the same with the "Fee: …" rows left out
+  (= PropReports "Equities" Total Δ; trade fees stay in). The old "dedupe" fee mode is gone.
+- **Dashboard → Total · all time** = PropReports Cash + Unrealized − deposits/withdrawals.
+- After deploying, press **Settings → Re-download full history** once. If PropReports' balance still holds money
+  no downloaded day explains, Settings → Synchronization says how much. Column names PropReports sends are
+  logged on every sync (Supabase → Edge Functions → sync → Logs).
+- Tests: `packages/engine/test/realWeeksOct2026.test.js` and the "REAL …" tests in `web/test/app.test.js`,
+  on the real exports (fixture `packages/engine/test/fixtures/gabriela-2026-10-19-to-11-04.json`).
+
 ## Update — 30 Oct 2026 (evening)
 
 - **Wording:** the P&L types are called **Total**, **Pure trading** and **After Share**, in that order, on every
@@ -62,8 +78,8 @@ there is just "Synced <time>".
 
 Verified here: 159 engine tests, 31 website tests, all SQL suites on Postgres 16 (incl. 0007, RLS on the
 new tables), both Edge Functions type-checked with Deno 2. Screenshots were taken of every page. Still
-**not** run against live PropReports. The fee de-duplication is chosen automatically from your real
-balance on the first sync.
+**not** run against live PropReports. (Superseded 5 Nov 2026: there is no fee de-duplication any more; fee
+adjustments are always added once, as in PropReports' Total Δ.)
 
 ---
 

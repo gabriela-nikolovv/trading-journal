@@ -38,17 +38,25 @@ export async function render(container, ctx) {
   const name = SCHEMA_SHORT[schema];
   const today = new Date().toISOString().slice(0, 10);
   const series = dailySeries(snapshots, schema, state.schedule);
-  const totalPnl = cumulative(series).at(-1)?.value ?? 0;
   const thisMonth = today.slice(0, 7);
   const monthPnl = series.filter((p) => p.date.startsWith(thisMonth)).reduce((a, p) => a + p.delta, 0);
 
-  // Per-trade numbers need a per-trade result; After Share is monthly, so trades use Total then.
-  const basis = schema === 'schema3' ? 'schema3' : 'schema1';
+  // Per-trade numbers use each trade's Net (its own trade fees taken off) — in Total and Pure trading
+  // alike, because Pure trading only leaves out the "Fee: …" rows, which are never part of a trade.
+  // After Share is monthly, so trades use Total then.
+  const basis = 'schema1';
   const allStats = computeStatistics(trades, basis);
   const st = status.state;
   // PropReports' own Cash + Unrealized is the account value; the stored daily chain is the fallback.
   const reported = st?.account_cash != null ? Number(st.account_cash) + Number(st.account_unrealized ?? 0) : null;
   const accountValue = reported ?? snapshots.at(-1)?.accountValue ?? null;
+  // Total · all time = what the account has made since it opened = PropReports' Cash + Unrealized minus
+  // deposits/withdrawals. Summing the synced days instead misses anything PropReports booked outside the
+  // downloaded days (Settings → Synchronization shows that amount when there is one).
+  const transfers = snapshots.reduce((a, s) => a + (s.transfers ?? 0), 0);
+  const totalPnl = schema === 'schema1' && reported !== null
+    ? Math.round((reported - transfers) * 10000) / 10000
+    : cumulative(series).at(-1)?.value ?? 0;
 
   const root = h('div', {});
   root.append(
