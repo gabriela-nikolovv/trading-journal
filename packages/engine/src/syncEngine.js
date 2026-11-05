@@ -224,14 +224,21 @@ export async function runSync({ client, store, today, token, forceFull = false, 
     });
     warnings.push(...snap.warnings);
 
-    if (accountInfo) {
-      const last = snap.rows.at(-1);
+    // Account value is ANCHORED to PropReports' own Cash + Unrealized. Rebuilding it only from the daily
+    // results misses anything before the returned history (opening balance, early charges or deposits),
+    // which leaves every day off by the same amount. The daily CHANGES are kept exactly; the whole chain is
+    // shifted so the latest day equals what PropReports reports.
+    if (accountInfo && snap.rows.length) {
       const reported = accountInfo.cash + accountInfo.unrealized;
-      if (last && Math.abs(last.accountValue - reported) > 0.05) {
-        warnings.push({
-          type: 'account_value_mismatch',
-          message: `Account value rebuilt from the daily data is ${last.accountValue.toFixed(2)}, but PropReports reports Cash + Unrealized of ${reported.toFixed(2)} (difference ${(reported - last.accountValue).toFixed(2)}). Usually a charge or deposit dated before the history PropReports returned. Settings → Re-download full history normally clears it.`,
-        });
+      const offset = Math.round((reported - snap.rows.at(-1).accountValue) * 10000) / 10000;
+      if (Math.abs(offset) > 0.005) {
+        for (const r of snap.rows) r.accountValue = Math.round((r.accountValue + offset) * 10000) / 10000;
+        if (!isFullHistory && Math.abs(offset) > 0.05) {
+          warnings.push({
+            type: 'account_value_anchored',
+            message: `Account value was moved by ${offset.toFixed(2)} to match PropReports’ Cash + Unrealized (${reported.toFixed(2)}). Days before this sync keep their earlier values; Settings → Re-download full history realigns everything.`,
+          });
+        }
       }
     }
 

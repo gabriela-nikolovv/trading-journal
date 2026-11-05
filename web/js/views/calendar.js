@@ -18,6 +18,8 @@ export async function render(container, ctx) {
   const now = new Date();
   state.cal ??= { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1, selected: null };
   state.cal.view ??= 'days';
+  // After Share is taken once a month, so it has no day-by-day calendar.
+  if (state.schema === 'schema2' && state.cal.view === 'days') state.cal.view = 'months';
   const { year, month, view } = state.cal;
 
   clear(container).append(loading('Loading calendar…'));
@@ -42,8 +44,8 @@ export async function render(container, ctx) {
 
   const root = h('div', {},
     h('div', { class: 'row between' }, h('h1', {}, 'Calendar'),
-      h('div', { class: 'row' }, segmented([['days', 'Days'], ['months', 'Months'], ['years', 'Years']], view, setView),
-        h('span', { class: 'muted' }, 'P&L view:'), schemaSelect(schema, (v) => ctx.setSchema(v)))),
+      h('div', { class: 'row' }, segmented(schema === 'schema2' ? [['months', 'Months'], ['years', 'Years']] : [['days', 'Days'], ['months', 'Months'], ['years', 'Years']], view, setView),
+        schemaSelect(schema, (v) => ctx.setSchema(v)))),
     statsStrip(period, series, trades, schema));
 
   const card = h('div', { class: 'card' },
@@ -62,8 +64,7 @@ export async function render(container, ctx) {
     try { comments = await api.getDailyComments(addMonths(period.from, -1), addMonths(period.to, 1)); } catch (e) { console.error(e); }
     try {
       cal = buildCalendarMonth({ year, month, schema, dailyData: snapshots, comments, profitSharePct: schema === 'schema2' ? resolvePctForMonth(state.schedule, period.from) : undefined });
-    } catch (e) { clear(container).append(errorCard('Schema 2 needs a profit-share percentage. Set it in Settings.', e)); return; }
-    if (schema === 'schema2') card.append(h('div', { class: 'notice' }, 'Schema 2: the month’s profit share is deducted once, on the last trading day of the month; other days show their pre-share result.'));
+    } catch (e) { clear(container).append(errorCard('A profit-share percentage is needed. Set it in Settings.', e)); return; }
     card.append(dayGrid(cal, state, schema, (d) => { state.cal.selected = d; rerender(); }));
     clear(container).append(root);
     if (state.cal.selected) root.append(await dayPanel(state.cal.selected, ctx, cal, comments, snapshots, rerender));
@@ -74,13 +75,18 @@ export async function render(container, ctx) {
 
 // ---------- stats strip ----------
 function statsStrip(period, series, trades, schema) {
-  const s = summarizePeriod(series, period.from, period.to);
   const t = computeTradeStats(trades.map((x) => ({ ...x, status: 'closed' })), { fromDate: period.from, toDate: period.to });
   const box = (label, value, cls = '') => h('div', { class: 'stat' }, h('div', { class: 'label' }, label), h('div', { class: `value ${cls}` }, value));
+  // After Share only exists per month, so it counts green / red MONTHS.
+  const byMonth = schema === 'schema2';
+  const s = byMonth
+    ? (() => { const ms = aggregateSeries(series.filter((d) => d.date >= period.from && d.date <= period.to), 'month'); const g = ms.filter((m) => m.pnl > 0).length, r = ms.filter((m) => m.pnl < 0).length; return { pnl: Math.round(ms.reduce((a, m) => a + m.pnl, 0) * 100) / 100, greenDays: g, redDays: r, greenPct: g + r ? g / (g + r) : null }; })()
+    : summarizePeriod(series, period.from, period.to);
+  const unit = byMonth ? 'months' : 'days';
   return h('div', { class: 'stat-strip card', id: 'cal-stats' },
     box(`${period.unit} P&L · ${SCHEMA_SHORT[schema]}`, money(s.pnl, { dollar: true }), signClass(s.pnl)),
-    box('Green days', String(s.greenDays), s.greenDays ? 'pos' : ''),
-    box('Red days', String(s.redDays), s.redDays ? 'neg' : ''),
+    box(`Green ${unit}`, String(s.greenDays), s.greenDays ? 'pos' : ''),
+    box(`Red ${unit}`, String(s.redDays), s.redDays ? 'neg' : ''),
     box('Green %', s.greenPct === null ? '—' : pct(s.greenPct, 0)),
     box('Bats', t.bat === null ? '—' : pct(t.bat, 0)),
     box('W/L', t.wlRatio === null ? '—' : t.wlRatio.toFixed(2)));
@@ -139,8 +145,20 @@ async function dayPanel(date, ctx, cal, comments, snapshots, rerender) {
     const x = bySymbol.get(s.symbol) ?? { symbol: s.symbol, direction: null, status: s.quantityTraded ? 'Traded' : 'Held' };
     bySymbol.set(s.symbol, { ...x, pr: s });
   }
-  const list = [...bySymbol.values()].map((x) => ({ ...x, result: x.pr ? x.pr.realized + x.pr.unrealizedDelta : x.realizedIfClosed, traded: x.pr?.quantityTraded ?? null }))
-    .sort((a, b) => Math.abs(b.result ?? 0) - Math.abs(a.result ?? 0));
+  // Each stock's day in the selected P&L type: Pure trading = realized + change in unrealized;
+  // Total = that minus the stock's own trade fees. Anything not tied to a stock (monthly fees) gets its
+  // own line, so the rows always add up to the day's number in the calendar.
+  const net = state.schema === 'schema1';
+  const list = [...bySymbol.values()].map((x) => {
+    const realized = x.pr ? x.pr.realized : x.realizedIfClosed;
+    const unreal = x.pr ? x.pr.unrealizedDelta : null;
+    const fees = x.pr ? x.pr.tradeCosts : 0;
+    const gross = realized === null && unreal === null ? null : (realized ?? 0) + (unreal ?? 0);
+    return { ...x, realized, unreal, fees, result: gross === null ? null : Math.round((net ? gross - fees : gross) * 100) / 100, traded: x.pr?.quantityTraded ?? null };
+  }).sort((a, b) => Math.abs(b.result ?? 0) - Math.abs(a.result ?? 0));
+  const dayValue = cell?.delta ?? null;
+  const stocksSum = list.reduce((a, x) => a + (x.result ?? 0), 0);
+  const rest = dayValue === null ? 0 : Math.round((dayValue - stocksSum) * 100) / 100;
 
   const snap = snapshots.find((x) => x.date === date);
   const line = (label, v, { bold = false, neg = false } = {}) => {
@@ -161,13 +179,18 @@ async function dayPanel(date, ctx, cal, comments, snapshots, rerender) {
     h('div', { class: 'row between' }, h('h2', {}, fmtDate(date)), h('div', {}, `${SCHEMA_SHORT[state.schema]}: `, h('b', { class: signClass(cell?.delta) }, cell?.delta === null || cell?.delta === undefined ? 'no trading data' : money(cell.delta)))),
     list.length
       ? h('div', { class: 'table-wrap' }, h('table', { id: 'day-positions' },
-        h('thead', {}, h('tr', {}, ['Symbol', 'Direction', 'That day', 'Shares traded', 'Day result (gross)'].map((t, i) => h('th', { class: i > 2 ? 'num' : '' }, t)))),
+        h('thead', {}, h('tr', {}, ['Symbol', 'Direction', 'That day', 'Shares traded', 'Realized', 'Unrealized Δ', ...(net ? ['Fees'] : []), SCHEMA_SHORT[state.schema]].map((t, i) => h('th', { class: i > 2 ? 'num' : '' }, t)))),
         h('tbody', {}, list.map((t) => h('tr', {},
           h('td', {}, h('b', {}, t.symbol)),
           h('td', {}, t.direction ? h('span', { class: `badge ${t.direction}` }, t.direction.toUpperCase()) : '—'),
           h('td', {}, h('span', { class: `badge ${STATUS_CLASS[t.status] ?? 'info'}` }, t.status)),
           h('td', { class: 'num' }, !t.traded ? '—' : Math.round(t.traded)),
-          h('td', { class: `num ${signClass(t.result)}` }, t.result === null ? '—' : money(t.result)))))))
+          h('td', { class: `num ${signClass(t.realized)}` }, t.realized === null ? '—' : money(t.realized)),
+          h('td', { class: `num ${signClass(t.unreal)}` }, t.unreal === null ? '—' : money(t.unreal)),
+          net ? h('td', { class: 'num' }, t.fees ? money(-t.fees) : '—') : null,
+          h('td', { class: `num ${signClass(t.result)}` }, h('b', {}, t.result === null ? '—' : money(t.result))))),
+          Math.abs(rest) >= 0.01 ? h('tr', { class: 'day-rest' }, h('td', { colspan: net ? 7 : 6 }, 'Other — not booked to a stock (e.g. monthly fees)'), h('td', { class: `num ${signClass(rest)}` }, money(rest))) : null,
+          dayValue !== null ? h('tr', { class: 'day-sum' }, h('td', { colspan: net ? 7 : 6 }, h('b', {}, `Day ${SCHEMA_SHORT[state.schema]}`)), h('td', { class: `num ${signClass(dayValue)}` }, h('b', {}, money(dayValue)))) : null)))
       : h('div', { class: 'muted' }, 'No positions were open on this day.'),
     h('div', { class: 'muted', style: 'font-size:.78rem;margin:.3rem 0 .6rem' }, '“Held” = carried overnight with no trade that day; its result is the change in its unrealized P&L.'),
     breakdown,

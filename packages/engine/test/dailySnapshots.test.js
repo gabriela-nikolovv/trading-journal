@@ -53,7 +53,7 @@ test('non-USD rows are flagged, never silently converted', () => {
   assert.equal(warnings[0].type, 'non_usd_positions');
 });
 
-test('sync engine stores snapshots, chains account value across syncs, and warns when it disagrees with PropReports Cash+Unrealized', async () => {
+test('sync engine stores snapshots, chains account value across syncs, and anchors it to PropReports Cash+Unrealized', async () => {
   const store = createMemoryStore();
   const positions = [pos('2026-09-03', 10), pos('2026-09-04', 5)];
   const ok = { 'Account Id': '348', 'First Traded': '2026-08-18', Cash: '12', Unrealized: '3' };
@@ -65,9 +65,10 @@ test('sync engine stores snapshots, chains account value across syncs, and warns
   const r2 = await runSync({ client: fakeClient({ positions: [...positions, pos('2026-09-09', 1)], accounts: [{ ...ok, Cash: '13', Unrealized: '3' }] }), store, today: '2026-09-11' });
   assert.equal(store.state.snapshots.at(-1).accountValue, 16);
   assert.ok(!r2.warnings.some((w) => w.type === 'account_value_mismatch'));
-  // PropReports says something different → loud warning, not silent
+  // PropReports says something different → the chain is anchored to PropReports' own balance, and noted
   const r3 = await runSync({ client: fakeClient({ positions, accounts: [{ ...ok, Cash: '999' }] }), store, today: '2026-09-12' });
-  assert.ok(r3.warnings.some((w) => w.type === 'account_value_mismatch'));
+  assert.equal(store.state.snapshots.find((r) => r.tradeDate === '2026-09-04').accountValue, 1002);
+  assert.ok(r3.warnings.some((w) => w.type === 'account_value_anchored'));
 });
 
 test('no fee columns in positions rows → trade fees come from the fills (no warning shown to the user)', () => {
@@ -124,4 +125,13 @@ test('full sync also reads adjustments from the creation date, before the first 
   await runSync({ client, store, today: '2026-09-10' });
   assert.deepEqual(seen[0], ['2026-08-01', '2026-08-31']);
   assert.equal(store.state.snapshots.find((r) => r.tradeDate === '2026-08-01').accountValue, -20);
+});
+
+test('full sync: account value is anchored to PropReports Cash + Unrealized while daily changes stay exact', async () => {
+  const store = createMemoryStore();
+  const positions = [pos('2026-09-03', 10), pos('2026-09-04', 5)];
+  await runSync({ client: fakeClient({ positions, accounts: [{ 'Account Id': '348', 'First Traded': '2026-08-18', Cash: '-600', Unrealized: '-46.46' }] }), store, today: '2026-09-10' });
+  const vals = store.state.snapshots.map((r) => r.accountValue);
+  assert.equal(vals.at(-1), -646.46);
+  assert.equal(Math.round((vals.at(-1) - vals.at(-2)) * 100) / 100, 5);
 });

@@ -81,21 +81,6 @@ export function createApi(sb) {
     // ---------- P&L data ----------
     async getSnapshots() { return (await fetchAll(() => sb.from('daily_account_snapshots').select('*').order('trade_date'))).map(toSnapshot); },
     async getClosedTrades() { return (await fetchAll(() => sb.from('position_instances').select(TRADE_SELECT).eq('status', 'closed').order('closed_at'))).map(toTrade); },
-    async getTradesPage({ filters = {}, page = 0, pageSize = 25 }) {
-      let q = sb.from('position_instances').select(TRADE_SELECT, { count: 'exact' });
-      q = filters.status === 'open' ? q.eq('status', 'open') : filters.status === 'all' ? q : q.eq('status', 'closed');
-      if (filters.symbol) q = q.ilike('symbol', `%${filters.symbol.trim()}%`);
-      if (filters.direction) q = q.eq('direction', filters.direction);
-      if (filters.sectorId) q = q.eq('sector_id', filters.sectorId);
-      if (filters.industryId) q = q.eq('industry_id', filters.industryId);
-      if (filters.from) q = q.gte('closed_at', `${filters.from}T00:00:00Z`);
-      if (filters.to) q = q.lte('closed_at', `${filters.to}T23:59:59Z`);
-      if (filters.result === 'win') q = q.gt('realized_pnl', 0);
-      if (filters.result === 'loss') q = q.lt('realized_pnl', 0);
-      const { data, error, count } = await q.order('opened_at', { ascending: false }).range(page * pageSize, page * pageSize + pageSize - 1);
-      if (error) throw new Error(error.message);
-      return { rows: (data ?? []).map(toTrade), total: count ?? 0 };
-    },
     /** Every position that was OPEN at some point of `day`: opened, closed, or simply held overnight through it. */
     async getPositionsOnDay(day) {
       const start = `${day}T00:00:00Z`, end = `${day}T23:59:59Z`;
@@ -106,10 +91,6 @@ export function createApi(sb) {
     async getSymbolDays(from, to) {
       return (await fetchAll(() => sb.from('daily_symbol_pnl').select('trade_date, symbol, realized, unrealized_delta, trade_costs, quantity_traded').gte('trade_date', from).lte('trade_date', to).order('trade_date')))
         .map((r) => ({ date: r.trade_date, symbol: r.symbol, realized: Number(r.realized), unrealizedDelta: Number(r.unrealized_delta), tradeCosts: Number(r.trade_costs), quantityTraded: Number(r.quantity_traded) }));
-    },
-    async getTradeFills(instanceId) {
-      const links = must(await sb.from('position_fills').select('running_quantity_after, running_avg_cost_after, fill:raw_fills(datetime, side, quantity, price, symbol, comm, ecn_fee, sec_fee, taf_fee, nscc_fee, clr_fee, misc_fee)').eq('position_instance_id', instanceId));
-      return links.map((l) => l.fill).filter(Boolean).sort((a, b) => a.datetime.localeCompare(b.datetime));
     },
     async countOpenPositions() { const { count } = await sb.from('position_instances').select('id', { count: 'exact', head: true }).eq('status', 'open'); return count ?? 0; },
 

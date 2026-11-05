@@ -38,11 +38,9 @@ export function makeFakeApi(over = {}) {
     setupAccount: async () => ({ propAccountId: 'a1' }),
     runSync: async () => { calls.runSync++; return { ok: true, fillsNew: 1, fillsUpdated: 0, openPositions: 2 }; },
     getSnapshots: async () => REAL_WEEK, getClosedTrades: async () => closed,
-    getTradesPage: async (q) => { calls.lastTradeQuery = q; return { rows: closed.filter((t) => !q.filters.symbol || t.symbol.includes(q.filters.symbol.toUpperCase())), total: closed.length }; },
     getPositionsOnDay: async (d) => [...closed.filter((t) => t.openedAt.toISOString().slice(0, 10) <= d && t.closedAt.toISOString().slice(0, 10) >= d),
       { id: 'o1', symbol: 'HOLD', direction: 'long', status: 'open', openedAt: new Date('2026-08-20T14:00:00Z'), closedAt: null, realizedPnl: 0, quantityTraded: 100, openQuantity: 100 }],
-    getSymbolDays: async (from) => (from === '2026-09-04' ? [{ date: from, symbol: 'HOLD', realized: 0, unrealizedDelta: 12.5, tradeCosts: 0, quantityTraded: 0 }, { date: from, symbol: 'WIN', realized: 23.18, unrealizedDelta: -2, tradeCosts: 0.1, quantityTraded: 20 }] : []),
-    getTradeFills: async () => [{ datetime: '2026-09-04T19:00:00', side: 'S', quantity: 20, price: '5.5' }],
+    getSymbolDays: async (from) => (from === '2026-09-04' ? [{ date: from, symbol: 'HOLD', realized: 0, unrealizedDelta: 25.24, tradeCosts: 0, quantityTraded: 0 }, { date: from, symbol: 'WIN', realized: 23.18, unrealizedDelta: -2, tradeCosts: 0, quantityTraded: 20 }] : []),
     countOpenPositions: async () => 3,
     getPositions: async () => { calls.getPositions++; return {
       ok: true, symbolsAwaitingClassification: [],

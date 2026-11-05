@@ -16,7 +16,7 @@ const adj = [{ date: '2026-09-01', cat: 'Fee: Platform', amount: -25.95, id: 'A1
 mkdirSync(new URL('./out/', import.meta.url), { recursive: true });
 const pos = (date, d) => ({ Date: date, Symbol: 'AAPL', Realized: '0', 'Unrealized Delta': String(d), Comm: '0', 'Ecn Fee': '0', SEC: '0', TAF: '0', NSCC: '0', Clr: '0', Misc: '0', 'Qty Traded': '0', Currency: 'USD' });
 const positions = [pos('2026-09-03', 10), pos('2026-09-04', 5)];
-const accounts = [{ 'Account Id': '348', 'First Traded': '2026-08-18', Cash: '-40.95', Unrealized: '0' }]; // 10 + 5 − 50.95 fees
+const accounts = [{ 'Account Id': '348', 'First Traded': '2026-08-18', Cash: '-35.95', Unrealized: '0' }]; // 10 + 5 − 50.95 fees
 const store = createMemoryStore();
 const batches = [];
 const orig = store.commit.bind(store);

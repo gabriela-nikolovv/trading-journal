@@ -1,6 +1,7 @@
 // Settings (spec section 41): connection, sync status + reconciliation warnings, profit share,
 // report name, market-data / TradingView status, preferences, sign-out.
-import { h, clear, loading, errorCard, toast, fmtDate, SCHEMA_LABELS } from '../lib.js';
+import { h, clear, loading, errorCard, toast, fmtDate } from '../lib.js';
+import { PNL_TYPES, PNL_EXPLAIN, PNL_NAME } from '../wording.js';
 import { parseAccountLabel } from '../engine/weeklyReport.js';
 
 export async function render(container, ctx) {
@@ -30,7 +31,7 @@ export async function render(container, ctx) {
       run ? h('div', { class: 'muted' }, `Last run: ${run.fills_fetched} fills fetched · ${run.fills_new} new · ${run.fills_updated} updated · ${run.adjustments_fetched} adjustments (${run.adjustments_new} new) · ${run.positions_detected} positions detected`) : null,
       warnings.length ? h('div', {}, h('h3', { style: 'margin-top:1rem' }, 'Reconciliation warnings'), warnings.map((w) => h('div', { class: 'notice warn' }, w.message))) : h('div', { class: 'muted' }, 'No reconciliation warnings from the last run.'),
       h('div', { class: 'row', style: 'margin-top:.8rem' }, h('button', { class: 'btn', onclick: () => ctx.syncNow({ full: true }) }, 'Re-download full history'))),
-    h('div', { class: 'card' }, h('h2', {}, 'Profit share (Schema 2)'),
+    h('div', { class: 'card' }, h('h2', {}, `Profit share (${PNL_NAME.schema2})`),
       h('p', { class: 'muted' }, 'Charged once per month, on the last day, only when the month is positive. Changing it affects the chosen month onward — earlier months keep the percentage they had.'),
       h('div', { class: 'row' }, h('label', {}, 'Percentage ', pctInput, ' %'), h('label', {}, 'Applies from the month of ', fromInput),
         h('button', { class: 'btn primary', id: 'save-pct', onclick: async () => {
@@ -42,8 +43,10 @@ export async function render(container, ctx) {
       test('Test the price provider (Yahoo Finance)', async () => { const r = await api.getQuotes(['AAPL']); const q = r.quotes.AAPL; return q.ok ? `Working ✔ AAPL ${q.price} (${q.session}, ${q.asOf})` : `Not available: ${q.reason}`; }),
       h('div', { style: 'height:.5rem' }),
       test('Test TradingView classification', async () => { const r = await api.classify(['AAPL']); const c = r.classifications.AAPL; return c.status === 'ok' ? `Working ✔ AAPL → ${c.sector} / ${c.industry}` : c.reason; })),
+    h('div', { class: 'card', id: 'pnl-types' }, h('h2', {}, 'P&L types'),
+      PNL_TYPES.map(([k, l]) => h('div', { class: 'pnl-type' }, h('b', {}, l), h('p', { class: 'muted' }, PNL_EXPLAIN[k])))),
     h('div', { class: 'card' }, h('h2', {}, 'Preferences'),
-      h('label', { class: 'field' }, 'Default P&L view', h('select', { onchange: (e) => ctx.setSchema(e.target.value, false) }, Object.entries(SCHEMA_LABELS).map(([k, l]) => h('option', { value: k, selected: state.schema === k }, l)))),
+      h('label', { class: 'field' }, 'Default P&L type', h('select', { onchange: (e) => ctx.setSchema(e.target.value, false) }, PNL_TYPES.map(([k, l]) => h('option', { value: k, selected: state.schema === k }, l)))),
       h('p', { class: 'muted' }, 'Times are shown exactly as PropReports reports them. Weeks start on Monday.')),
     h('div', { class: 'card' }, h('button', { class: 'btn danger big', onclick: () => ctx.signOut() }, 'Sign out')));
 }

@@ -26,7 +26,7 @@ do $$ begin
   assert (select schema1_delta from daily_account_snapshots where trade_date='2026-09-01') = -50.95, 'sync1: Sep 1 schema1 = the monthly fee adjustments';
   assert (select schema3_delta from daily_account_snapshots where trade_date='2026-09-01') = 0, 'sync1: schema3 excludes the fees';
   assert (select account_value from daily_account_snapshots where trade_date='2026-09-04') = -35.95, 'sync1: account value chains through the fee day';
-  assert (select account_cash from sync_state) = -40.95, 'sync1: PropReports cash stored';
+  assert (select account_cash from sync_state) = -35.95, 'sync1: PropReports cash stored';
 end $$;
 
 -- user sets Stop Loss / notes / sector metadata

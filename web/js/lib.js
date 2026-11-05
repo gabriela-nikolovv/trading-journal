@@ -1,5 +1,6 @@
 // Small DOM + formatting helpers shared by every view. No framework.
 import { formatSignedParen } from './engine/format.js';
+import { PNL_TYPES } from './wording.js';
 
 /** h('div', {class:'x', onclick: fn}, 'text', childEl) */
 export function h(tag, attrs = {}, ...kids) {
@@ -78,15 +79,12 @@ export function segmented(options, value, onChange) {
   return wrap;
 }
 
-export const SCHEMA_LABELS = {
-  schema1: 'Schema 1 — Report Total (after all fees)',
-  schema2: 'Schema 2 — After Profit Share',
-  schema3: 'Schema 3 — Pure Trading (before costs)',
-};
-export const SCHEMA_SHORT = { schema1: 'Schema 1', schema2: 'Schema 2', schema3: 'Schema 3' };
+// Names of the P&L types live in wording.js.
+export const SCHEMA_LABELS = Object.fromEntries(PNL_TYPES);
+export const SCHEMA_SHORT = SCHEMA_LABELS;
 
 export function schemaSelect(value, onChange) {
-  const sel = h('select', { 'aria-label': 'P&L schema', onchange: (e) => onChange(e.target.value) });
-  for (const [k, label] of Object.entries(SCHEMA_LABELS)) sel.append(h('option', { value: k, selected: k === value }, label));
+  const sel = h('select', { 'aria-label': 'P&L type', onchange: (e) => onChange(e.target.value) });
+  for (const [k, label] of PNL_TYPES) sel.append(h('option', { value: k, selected: k === value }, label));
   return sel;
 }

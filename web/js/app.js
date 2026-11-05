@@ -4,14 +4,13 @@ import { h, clear, toast, errorCard } from './lib.js';
 import * as dashboard from './views/dashboard.js';
 import * as positions from './views/positions.js';
 import * as calendar from './views/calendar.js';
-import * as trades from './views/trades.js';
 import * as weekly from './views/weekly.js';
 import * as settings from './views/settings.js';
 import * as home from './views/home.js';
 
 export const TABS = [
   ['dashboard', 'Dashboard', dashboard], ['positions', 'Current Positions', positions], ['calendar', 'Calendar', calendar],
-  ['weekly', 'Weekly Report', weekly], ['trades', 'Trades', trades], ['settings', 'Settings', settings],
+  ['weekly', 'Weekly Report', weekly], ['settings', 'Settings', settings],
 ];
 // Pages reachable without a tab (the logo opens the intro page).
 const PAGES = [...TABS, ['home', 'Home', home]];

@@ -34,9 +34,9 @@ test('signed in but no PropReports account yet → first-time setup screen with 
   assert.match(text(document.body), /never typed into or sent to this page/);
 });
 
-test('shell: six tabs with Weekly Report before Trades; SYNC NOW with the last-sync line under it; no counts, warnings or "null"', async () => {
+test('shell: five tabs (no Trades); SYNC NOW with the last-sync line under it; no counts, warnings or "null"', async () => {
   const { $, $$ } = await boot();
-  assert.deepEqual($$('.tab').map((b) => b.textContent), ['Dashboard', 'Current Positions', 'Calendar', 'Weekly Report', 'Trades', 'Settings']);
+  assert.deepEqual($$('.tab').map((b) => b.textContent), ['Dashboard', 'Current Positions', 'Calendar', 'Weekly Report', 'Settings']);
   assert.equal($('#sync-now').textContent, 'SYNC NOW');
   assert.match(text($('#sync-status')), /^Synced /);
   assert.equal($('#sync-now').nextElementSibling, $('#sync-status'), 'status sits under the button');
@@ -69,25 +69,63 @@ test('failed sync: a friendly message, never a stack trace, and the last good da
   assert.ok(document.querySelector('.kpi'), 'dashboard still rendered');
 });
 
-test('Dashboard: schema switch changes the numbers and labels; schemas are never mixed', async () => {
+test('P&L types are named Total, Pure trading, After Share — in that order — with no "Schema" wording or explanations on the pages', async () => {
+  const { $ } = await boot();
+  const sel = $('select[aria-label="P&L type"]');
+  assert.deepEqual([...sel.options].map((o) => o.textContent), ['Total', 'Pure trading', 'After Share']);
+  assert.ok(!/Schema/i.test(document.body.textContent));
+  assert.equal(document.querySelector('#view .notice'), null, 'no explanation banner');
+});
+
+test('Dashboard: the P&L type switch changes the numbers; account value is PropReports’ own; no Open exposure', async () => {
   const { $, $$ } = await boot();
   const kpis = () => Object.fromEntries($$('.kpi').map((k) => [text(k.querySelector('.label')), text(k.querySelector('.value'))]));
   assert.equal(kpis()['Account value'], '($646.46)');
-  const s1 = kpis()['Total P&L · Schema 1'];
-  assert.equal(s1, '($9.39)');                       // 41.56 trading − 50.95 monthly fees
-  const sel = $('select[aria-label="P&L schema"]');
+  assert.ok(!('Open exposure' in kpis()));
+  assert.equal(kpis()['Total P&L · all time'], '($9.39)');            // 41.56 trading − 50.95 monthly fees
+  const sel = $('select[aria-label="P&L type"]');
   sel.value = 'schema3'; sel.dispatchEvent(new window.Event('change'));
   await tick(80);
-  assert.equal(kpis()['Total P&L · Schema 3'], '$41.56'); // pure trading, no fees
-  assert.ok(!('Total P&L · Schema 1' in kpis()));
-  assert.ok($('svg.chart polyline'), 'chart drawn');
-  assert.ok($('svg.chart line[stroke-dasharray]'), 'zero line drawn so negatives are visible');
+  assert.equal(kpis()['Pure trading P&L · all time'], '$41.56');
+  assert.ok(!('Total P&L · all time' in kpis()));
+});
+
+test('Dashboard: account value uses PropReports Cash + Unrealized even when the stored daily chain differs', async () => {
+  const { $$ } = await boot({ getSyncStatus: async () => ({ state: { status: 'idle', last_success_at: '2026-09-04T20:00:00Z', account_cash: -1200, account_unrealized: 34.5 }, lastRun: null }) });
+  const k = $$('.kpi').find((x) => /Account value/.test(x.textContent));
+  assert.equal(text(k.querySelector('.value')), '($1,165.50)');
+});
+
+test('Dashboard chart: range buttons (week / month / 6 months / 1 year / all), no Cumulative / Account value buttons, drag moves the window', async () => {
+  const { $, ctx } = await boot();
+  const card = $('#perf-chart').closest('.card');
+  assert.deepEqual([...card.querySelectorAll('.segmented button')].map(text), ['This week', 'This month', '6 months', '1 year', 'All time']);
+  assert.ok(!/Cumulative|Account value/.test(text(card.querySelector('.segmented'))));
+  [...card.querySelectorAll('.segmented button')].find((b) => text(b) === 'All time').click();
+  await waitFor(() => /31 Aug 2026/.test(text($('#chart-window'))));
+  assert.ok($('#perf-chart svg.chart polyline'), 'chart drawn');
+  assert.ok($('#perf-chart svg.chart line[stroke-dasharray]'), 'zero line');
+  [...card.querySelectorAll('.segmented button')].find((b) => text(b) === 'This month').click();
+  const before = ctx.state.chartWindow.from;
+  const holder = $('#perf-chart');
+  const ev = (type, x) => { const e = new window.MouseEvent(type, { clientX: x, bubbles: true }); e.pointerId = 1; holder.dispatchEvent(e); };
+  ev('pointerdown', 600); ev('pointermove', 900); ev('pointerup', 900);
+  assert.ok(ctx.state.chartWindow.from < before, 'dragging right shows earlier dates');
+});
+
+test('Dashboard: overall statistics can be shown for this week / this month / this year / all time', async () => {
+  const { $, $$ } = await boot();
+  const pick = () => [...$('#overall-stats .segmented').querySelectorAll('button')];
+  assert.deepEqual(pick().map(text), ['This week', 'This month', 'This year', 'All time']);
+  assert.match(text($('#overall-stats')), /2 trades/);
+  pick().find((b) => text(b) === 'This month').click();
+  await waitFor(() => /No completed trades in this period/.test(text($('#overall-stats'))));
 });
 
 test('Dashboard: no buying power card; KPI cards share one grid; overall stats headline + closed sections; Worst 10 tab', async () => {
   const { $, $$ } = await boot();
   assert.ok(!$$('.kpi').some((k) => /Buying power/.test(k.textContent)));
-  assert.equal($$('.cards-kpi > .kpi').length, 6);
+  assert.equal($$('.cards-kpi > .kpi').length, 5);
   assert.ok(!/Average R|needs stop losses|By sector|Unclassified/.test(text($('#view'))));
   const ov = $('#overall-stats');
   assert.match(text(ov), /Net P&L/); assert.match(text(ov), /BAT/); assert.match(text(ov), /W\/L ratio/);
@@ -138,9 +176,13 @@ test('Split position: lots are listed under it with their own stops, R and DERIS
   assert.equal(api.calls.updatePosition.length, 0);
 });
 
-test('Split: separate entries are proposed as separate lots (by entry day) and saved; "Keep as one position" undoes it', async () => {
+test('Positions: ONE pink Edit button per row; Split lives inside Edit and proposes one lot per entry day; "Keep as one position" undoes it', async () => {
   const { $, $$, api } = await boot({}, { tab: 'positions' });
-  (await waitFor(() => $('.btn-split.hint'))).click();
+  await waitFor(() => $$('.btn-edit').length === 4);
+  assert.ok($$('.btn-edit, .btn-edit-lot').every((b) => b.classList.contains('primary')), 'pink');
+  assert.equal($$('.btn-split').length, 0);
+  $$('.btn-edit')[0].click();
+  (await waitFor(() => $('#open-split'))).click();
   await waitFor(() => $$('.lot-select').length === 2);
   assert.deepEqual($$('.lot-select').map((s) => s.value), ['0', '1']);
   $('#save-split').click();
@@ -148,8 +190,9 @@ test('Split: separate entries are proposed as separate lots (by entry day) and s
   const [id, lots] = api.calls.saveLots[0];
   assert.equal(id, 'p1');
   assert.deepEqual(lots.map((l) => [l.label, l.entry_keys.length, l.original_stop, l.current_stop]), [['Lot 1', 1, 9, 9], ['Lot 2', 1, 9, 9]]);
-  await waitFor(() => $$('.btn-split').some((b) => b.textContent === 'Lots'));
-  $$('.btn-split').find((b) => b.textContent === 'Lots').click();
+  await waitFor(() => $$('.btn-edit').length === 4 && !document.querySelector('.overlay'));
+  $$('.btn-edit')[3].click();                       // DDD, already split
+  (await waitFor(() => $('#open-split'))).click();
   (await waitFor(() => $('#merge-lots'))).click();
   await waitFor(() => api.calls.saveLots.length === 2);
   assert.deepEqual(api.calls.saveLots[1], ['p4', []]);
@@ -204,28 +247,36 @@ test('Calendar: weeks start on MONDAY; Sept 2026 grid begins Mon 31 Aug; weekly 
   assert.deepEqual($$('.cal-head').map((e) => e.textContent), ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Week']);
   assert.equal($$('.cal-cell')[0].dataset.date, '2026-08-31');
   assert.equal($$('.cal-cell')[1].dataset.date, '2026-09-01');
-  assert.match(text($$('.cal-week')[0]), /\(9\.39\)/);     // Schema 1 week: 41.56 − 50.95
+  assert.match(text($$('.cal-week')[0]), /\(9\.39\)/);     // Total week: 41.56 − 50.95
 });
 
-test('Calendar: switching to Schema 3 changes the weekly result to the pure-trading 41.56 (not forced to one schema)', async () => {
+test('Calendar: switching to Pure trading changes the weekly result to 41.56; After Share has no day calendar (months / years only)', async () => {
   const { $, $$ } = await boot({}, { tab: 'calendar', before: (c) => { c.state.cal = { year: 2026, month: 9, selected: null }; } });
-  const sel = await waitFor(() => $('select[aria-label="P&L schema"]'));
-  assert.equal(sel.options.length, 3);
+  const sel = await waitFor(() => $('select[aria-label="P&L type"]'));
   sel.value = 'schema3'; sel.dispatchEvent(new window.Event('change'));
-  await waitFor(() => /41\.56/.test(text($$('.cal-week')[0])));
+  await waitFor(() => $$('.cal-week').length && /41\.56/.test(text($$('.cal-week')[0])));
+  const sel2 = $('select[aria-label="P&L type"]');
+  sel2.value = 'schema2'; sel2.dispatchEvent(new window.Event('change'));
+  await waitFor(() => $('#months-grid'));
+  assert.equal($('.cal-grid'), null);
+  assert.deepEqual($$('#view .segmented button').map(text), ['Months', 'Years']);
+  assert.match(text($('#cal-stats')), /Green months/);
 });
 
-test('Calendar: a day lists positions HELD overnight too, with PropReports’ per-symbol result; one Fees line, then Total Δ', async () => {
-  const { $, api } = await boot({}, { tab: 'calendar', before: (c) => { c.state.cal = { year: 2026, month: 9, selected: null }; } });
+test('Calendar day: every stock open that day (held overnight too) in the SELECTED P&L type, adding up to the day', async () => {
+  const { $, $$, api } = await boot({}, { tab: 'calendar', before: (c) => { c.state.cal = { year: 2026, month: 9, selected: null }; } });
   (await waitFor(() => $('.cal-cell[data-date="2026-09-04"]'))).click();
   const panel = await waitFor(() => $('#day-panel'));
   await waitFor(() => $('#day-positions'));
+  const heads = [...$('#day-positions').querySelectorAll('thead th')].map(text);
+  assert.deepEqual(heads, ['Symbol', 'Direction', 'That day', 'Shares traded', 'Realized', 'Unrealized Δ', 'Fees', 'Total']);
   const rows = [...$('#day-positions').querySelectorAll('tbody tr')].map(text);
-  assert.ok(rows.some((r) => /HOLD/.test(r) && /Held/.test(r) && /12\.50/.test(r)), rows.join(' | '));
-  assert.ok(rows.some((r) => /WIN/.test(r) && /Closed/.test(r) && /21\.18/.test(r)), rows.join(' | '));
+  assert.ok(rows.some((r) => /HOLD/.test(r) && /Held/.test(r) && /25\.24/.test(r)), rows.join(' | '));
+  assert.ok(rows.some((r) => /WIN/.test(r) && /Closed/.test(r) && /23\.18/.test(r) && /\(2\.00\)/.test(r) && /21\.18/.test(r)), rows.join(' | '));
+  assert.match(rows.at(-1), /Day Total\s*46\.42/);
+  assert.ok(!rows.some((r) => /not booked to a stock/.test(r)), 'stocks add up to the day');
   const lines = [...panel.querySelectorAll('table.breakdown tr')].map((tr) => text(tr.firstChild));
   assert.deepEqual(lines, ['Trading result (realized + change in unrealized)', 'Fees', 'Total Δ']);
-  assert.ok(!/Trade costs|Fee adjustments/.test(text(panel)));
   assert.equal($('#day-comment').value, 'Waited for the right entry.');
   $('#day-comment').value = 'Updated note';
   [...panel.querySelectorAll('button')].find((b) => b.textContent === 'Save comment').click();
@@ -237,34 +288,19 @@ test('Calendar: month stats strip (P&L, green/red days, green %, Bats, W/L) and 
   const { $, $$ } = await boot({}, { tab: 'calendar', before: (c) => { c.state.cal = { year: 2026, month: 9, selected: null }; } });
   const strip = await waitFor(() => $('#cal-stats'));
   const vals = Object.fromEntries([...strip.querySelectorAll('.stat')].map((s) => [text(s.querySelector('.label')), text(s.querySelector('.value'))]));
-  assert.equal(vals['Month P&L · Schema 1'], '($5.01)');   // Sep 1–4: −55.16 −0.09 +3.82 +46.42
+  assert.equal(vals['Month P&L · Total'], '($5.01)');   // Sep 1–4: −55.16 −0.09 +3.82 +46.42
   assert.equal(vals['Green days'], '2'); assert.equal(vals['Red days'], '2'); assert.equal(vals['Green %'], '50%');
   assert.equal(vals['Bats'], '50%');
   assert.notEqual(vals['W/L'], '—');
-  $$('.segmented button').find((b) => b.textContent === 'Months').click();
+  $$('#view .segmented button').find((b) => b.textContent === 'Months').click();
   const months = await waitFor(() => $('#months-grid'));
   assert.equal(months.querySelectorAll('.period-tile').length, 12);
   assert.match(text(months.querySelector('[data-month="2026-08"]')), /\(4\.38\)/);
   months.querySelector('[data-month="2026-09"]').click();
   await waitFor(() => $('.cal-grid'));
-  $$('.segmented button').find((b) => b.textContent === 'Years').click();
+  $$('#view .segmented button').find((b) => b.textContent === 'Years').click();
   const years = await waitFor(() => $('#years-grid'));
   assert.match(text(years), /2026/);
-});
-
-test('Trades: lists completed trades with gross, fees and net side by side; filter sends the query; row opens detail with executions', async () => {
-  const { $, $$, api } = await boot({}, { tab: 'trades' });
-  await waitFor(() => $$('tbody tr').length === 2);
-  assert.match(text($$('tbody tr')[0]), /WIN/);
-  const symbol = $('input[placeholder="AAPL"]'); symbol.value = 'WIN'; symbol.dispatchEvent(new window.Event('change'));
-  await waitFor(() => api.calls.lastTradeQuery?.filters.symbol === 'WIN');
-  await waitFor(() => $$('tbody tr').length === 1);
-  $$('tbody tr')[0].click();
-  const modal = await waitFor(() => $('.overlay'));
-  assert.match(text(modal), /Schema 3 \(pure trading\)/);
-  assert.match(text(modal), /Schema 1 \(after fees\)/);
-  assert.match(text(modal), /STOP NOT SET/);
-  await waitFor(() => /Underlying executions/.test(text($('.overlay'))) && $('.overlay table'));
 });
 
 test('Weekly Report: nothing is generated until you press Generate; the comment step is pre-filled from day comments', async () => {
@@ -310,6 +346,13 @@ test('Weekly Report: the four summary boxes on the page are one equal-width grid
   await waitFor(() => $('.kpi-row'));
   assert.equal($$('.kpi-row > .card.kpi').length, 4);
   assert.ok($$('.kpi-row > .card').every((c) => !c.getAttribute('style')), 'no per-box sizing');
+});
+
+test('Settings: the P&L types are explained here (and only here)', async () => {
+  const { $ } = await boot({}, { tab: 'settings' });
+  const card = await waitFor(() => $('#pnl-types'));
+  assert.deepEqual([...card.querySelectorAll('.pnl-type b')].map(text), ['Total', 'Pure trading', 'After Share']);
+  assert.match(text(card), /profit share/i);
 });
 
 test('Settings: no typed-in report name; the account shows the code parsed from PropReports', async () => {

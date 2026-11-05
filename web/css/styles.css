@@ -130,6 +130,7 @@ tr.has-lots td { border-bottom-color: transparent; }
 tr.lot-row td { background: #fcfcfd; font-size: .9rem; }
 .lot-tag { display: inline-block; white-space: nowrap; margin-left: .9rem; padding: .05rem .5rem; border-left: 3px solid var(--pink); font-weight: 700; font-size: .8rem; }
 .stop-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+.lots-box { border: 1px dashed var(--pink-line); border-radius: 10px; padding: .6rem .8rem; margin-top: .6rem; } .lots-box p { margin: .2rem 0 .5rem; }
 .hint-text { display: block; font-weight: 400; color: var(--muted); font-size: .75rem; }
 .bar { height: 9px; background: #f0f1f4; border-radius: 999px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--pink); }
@@ -203,6 +204,10 @@ table.breakdown td:first-child { color: var(--muted); }
 .toast.error { background: var(--neg); }
 .login-wrap { max-width: 400px; margin: 10vh auto; }
 .chart { width: 100%; height: 280px; }
+.chart-holder { cursor: grab; touch-action: pan-y; user-select: none; }
+.chart-holder.dragging { cursor: grabbing; }
+.chart-window { font-size: .9rem; color: var(--muted); margin: .2rem 0 .4rem; }
+.pnl-type { margin: .4rem 0 .8rem; } .pnl-type p { margin: .2rem 0 0; }
 
 @media (max-width: 980px) {
   .stat-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -219,3 +224,5 @@ table.breakdown td:first-child { color: var(--muted); }
 }
 
 .sticky-right { position: sticky; right: 0; background: #fff; box-shadow: -6px 0 8px -8px rgba(0,0,0,.25); }
+#day-positions tr.day-rest td { color: var(--muted); font-style: italic; }
+#day-positions tr.day-sum td { border-top: 2px solid var(--line); }

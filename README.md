@@ -2,7 +2,23 @@
 
 **START HERE → `SETUP-GUIDE.md`** (step-by-step, no terminal needed).
 
-## Latest update — review round (30 Oct 2026)
+## Update — 30 Oct 2026 (evening)
+
+- **Wording:** the P&L types are called **Total**, **Pure trading** and **After Share**, in that order, on every
+  page. Their names and explanations live in `web/js/wording.js`. The explanations appear only in Settings →
+  P&L types. All other on-screen text is in `web/js/views/<page>.js`.
+- **Dashboard:** Open exposure is removed. Account value is now PropReports' own Cash + Unrealized. The daily
+  account-value history is also lined up with that figure on every sync, because building it from the daily
+  results alone left it off by a constant amount. The chart has This week / This month / 6 months / 1 year /
+  All time, and you can hold and drag it to move through time. Overall statistics have a This week /
+  This month / This year / All time choice.
+- **Current Positions:** one pink Edit button per row. Split is inside Edit.
+- **Calendar:** the day panel shows each stock's Realized, Unrealized Δ, Fees and the value in the selected type.
+  The rows add up to the day's number, and any leftover (e.g. monthly fees) has its own line. After Share is
+  shown by month and year only.
+- **Trades tab removed**, with its code.
+
+## Review round (30 Oct 2026)
 
 Deploy as usual (push to GitHub → both workflows run). Migration `0007_review_round.sql` runs by itself and
 clears the sync cursor, so **the first sync after deploying re-downloads the full history** and rebuilds every

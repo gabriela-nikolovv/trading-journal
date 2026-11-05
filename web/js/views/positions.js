@@ -96,13 +96,10 @@ function rows(p, ctx, refresh) {
   const entryDays = new Set((p.entries ?? []).map((e) => e.date)).size;
   const sectorCell = h('td', { class: 'sector-cell', title: [p.sector, p.industry].filter(Boolean).join(' · ') }, p.sector ?? h('span', { class: 'muted' }, '—'), p.industry ? h('div', { class: 'muted', style: 'font-size:.75rem' }, p.industry) : null);
   const actions = h('td', { class: 'actions-cell' }, h('div', { class: 'pos-actions' },
-    h('button', { class: 'btn small btn-edit', title: split ? 'Edit sector, industry and notes (stops are per lot)' : 'Edit stops, sector, industry and notes', onclick: () => editDialog({ position: p, unit: split ? null : p }, ctx, refresh) }, 'Edit'),
-    (p.entries?.length ?? 0) > 1 || split
-      ? h('button', { class: `btn small btn-split ${!split && entryDays > 1 ? 'hint' : ''}`, title: 'Show separate entries of this ticker as separate positions, each with its own stops', onclick: () => splitDialog(p, ctx, refresh) }, split ? 'Lots' : 'Split')
-      : null));
+    h('button', { class: 'btn primary small btn-edit', title: split ? 'Edit sector, industry, notes and lots (stops are per lot)' : 'Edit stops, sector, industry, notes — and split into lots', onclick: () => editDialog({ position: p, unit: split ? null : p }, ctx, refresh) }, 'Edit')));
   const main = h('tr', { class: split ? 'has-lots' : '' },
     h('td', {}, h('b', {}, p.symbol), ' ', h('span', { class: `badge ${p.direction}` }, p.direction.toUpperCase()),
-      split ? h('div', { class: 'muted small-note' }, `${p.lots.length} lots`) : entryDays > 1 ? h('div', { class: 'muted small-note', title: 'Bought on different days — Split to give each entry its own stops' }, `${entryDays} separate entries`) : null),
+      split ? h('div', { class: 'muted small-note' }, `${p.lots.length} lots`) : entryDays > 1 ? h('div', { class: 'muted small-note', title: 'Bought on different days — Split to give each entry its own stops' }, `${entryDays} separate entries — Edit to split`) : null),
     h('td', { class: 'num' }, p.quantity), h('td', { class: 'num' }, money(p.avgEntry)), h('td', { class: 'num' }, priceCell(p)),
     h('td', { class: 'num' }, signed(p.unrealizedPnl)),
     h('td', { class: 'num' }, split ? h('span', { class: 'muted' }, 'per lot') : stopText(p.originalStop)),
@@ -119,7 +116,7 @@ function rows(p, ctx, refresh) {
     h('td', { class: 'num' }, stopText(l.originalStop)), h('td', { class: 'num' }, stopText(l.currentStop)),
     h('td', { class: 'num' }, rCell(l.currentR, l)), h('td', { class: 'num' }, riskCell(l)),
     h('td', { class: 'num' }, daysHeld(l.openedAt) ?? '—'), h('td', {}),
-    h('td', { class: 'actions-cell' }, h('div', { class: 'pos-actions' }, h('button', { class: 'btn small btn-edit-lot', onclick: () => editDialog({ position: p, unit: l, lot: l }, ctx, refresh) }, 'Edit')))))];
+    h('td', { class: 'actions-cell' }, h('div', { class: 'pos-actions' }, h('button', { class: 'btn primary small btn-edit-lot', onclick: () => editDialog({ position: p, unit: l, lot: l }, ctx, refresh) }, 'Edit')))))];
 }
 
 // ---------- edit ----------
@@ -203,6 +200,10 @@ function editDialog({ position: p, unit, lot = null }, ctx, refresh) {
     warn,
     sectorSel ? h('label', { class: 'field' }, 'Sector', sectorSel) : null, industrySel ? h('label', { class: 'field' }, 'Industry', industrySel) : null,
     h('label', { class: 'field' }, 'Notes', notes),
+    !lot && ((p.entries?.length ?? 0) > 1 || p.lots?.length) ? h('div', { class: 'lots-box' },
+      h('b', {}, 'Lots'),
+      h('p', { class: 'muted' }, p.lots?.length ? `Split into ${p.lots.length} lots, each with its own stops.` : `${p.entries.length} separate entry executions — split them into lots to give each its own stops.`),
+      h('button', { class: 'btn', id: 'open-split', onclick: () => { modal.close(); splitDialog(p, ctx, refresh); } }, p.lots?.length ? 'Change lots…' : 'Split into lots…')) : null,
     h('div', { class: 'row', style: 'margin-top:1rem' }, save, h('button', { class: 'btn big', onclick: () => modal.close() }, 'Cancel'))]);
 }
 
