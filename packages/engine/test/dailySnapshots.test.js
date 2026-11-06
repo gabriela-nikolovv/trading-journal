@@ -26,14 +26,14 @@ test('reproduces the real week: daily Total Δ row, and the account-value row IN
   assert.equal(rows[1].marketDataFees, 25);
 });
 
-test('Schema 3 excludes every cost; Schema 1 includes trade costs and all fee adjustments (spec test 1000 / 800)', () => {
+test('Pure trading = Net + Unrealized Δ (trade fees in, "Fee:" rows out); Total also takes the Fee: rows (1000 / 900 / 800)', () => {
   const { rows } = buildDailySnapshots({
     positionRows: [{ ...pos('2026-09-01', 0), Realized: '1000', Comm: '100' }],
     adjustments: [adj('2026-09-01', 'Fee: Market Data', -50), adj('2026-09-01', 'Fee: Platform', -50)],
     startingAccountValue: 0,
   });
-  assert.equal(rows[0].schema3Delta, 1000);
-  assert.equal(rows[0].schema1Delta, 800); // 1000 − 100 − 50 − 50
+  assert.equal(rows[0].schema3Delta, 900);  // PropReports "Equities" Total Δ
+  assert.equal(rows[0].schema1Delta, 800);  // 1000 − 100 − 50 − 50
   assert.equal(rows[0].realizedNet, 900);
 });
 
@@ -79,24 +79,31 @@ test('no fee columns in positions rows → trade fees come from the fills (no wa
   assert.equal(symbolRows[0].tradeCosts, 0.37);
 });
 
-test('DOUBLE-COUNT FIX: trade fees that ALSO arrive as a daily fee adjustment are counted once (Total Δ = Net + Adj Fees + Unrealized Δ)', () => {
-  // the day's commission shows up both on the fills and as an adjustment
+test('a fee adjustment is always added once, even on a day with trade fees (Total Δ = Net + Adj Fees + Unrealized Δ)', () => {
+  // the old "dedupe" mode kept only max(trade fees, fee adjustments) and dropped e.g. Daily Interest
   const { rows, feeMode } = buildDailySnapshots({
     positionRows: [{ ...pos('2026-09-02', 0), Realized: '20', Comm: '1.20' }],
-    adjustments: [adj('2026-09-02', 'Fee: Commission', -1.2)],
+    adjustments: [adj('2026-09-02', 'Fee: Daily Interest', -0.06)],
     startingAccountValue: 0,
   });
-  assert.equal(feeMode, 'dedupe');
-  assert.equal(rows[0].commissions, 1.2);
-  assert.equal(rows[0].schema1Delta, 18.8);   // not 17.60
-  assert.equal(rows[0].accountValue, 18.8);
+  assert.equal(feeMode, 'separate');
+  assert.equal(rows[0].schema3Delta, 18.8);
+  assert.equal(rows[0].schema1Delta, 18.74);
+  assert.equal(rows[0].accountValue, 18.74);
 });
 
-test('auto mode follows PropReports’ own balance: when the adjustment is a DIFFERENT charge, both are kept', () => {
-  const input = { positionRows: [{ ...pos('2026-09-02', 0), Realized: '20', Comm: '1.20' }], adjustments: [adj('2026-09-02', 'Locate fee', -3)], startingAccountValue: 0 };
-  assert.equal(buildDailySnapshots({ ...input, reportedAccountValue: 15.8 }).feeMode, 'separate');
-  assert.equal(buildDailySnapshots({ ...input, reportedAccountValue: 15.8 }).rows[0].schema1Delta, 15.8);
-  assert.equal(buildDailySnapshots({ ...input, reportedAccountValue: 17 }).feeMode, 'dedupe');
+test('fee columns are read whatever their case (PropReports writes "ECN Fee", "CLR", "MISC", "ACC")', () => {
+  const r = { Date: '2026-10-20', Symbol: 'ARM', Realized: '-5.035', 'Unrealized Delta': '0', Comm: '0.012', 'ECN Fee': '0.0139', SEC: '0.02', CLR: '0', CAT: '0', TAF: '0.02', NSCC: '0.036', NFA: '0', ORF: '0', MISC: '0', ACC: '0', 'Qty Traded': '4' };
+  const { symbolRows } = buildDailySnapshots({ positionRows: [r], adjustments: [], startingAccountValue: 0 });
+  assert.equal(symbolRows[0].tradeCosts, 0.1019);
+  assert.equal(symbolRows[0].net, -5.1369);
+});
+
+test('a Net column on the positions row is used as is', () => {
+  const r = { Date: '2026-10-30', Symbol: 'AZN', Realized: '10.6', Net: '10.5096', 'Unrealized Delta': '0', Comm: '0.03' };
+  const { rows, symbolRows } = buildDailySnapshots({ positionRows: [r], adjustments: [], startingAccountValue: 0 });
+  assert.equal(symbolRows[0].net, 10.5096);
+  assert.equal(rows[0].schema1Delta, 10.5096);
 });
 
 test('recurring monthly fees stay out of the weekly Total Δ row, daily trade-fee adjustments stay IN', () => {

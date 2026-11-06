@@ -3,20 +3,21 @@
 // readOptional() so a missing optional column never throws — it just comes
 // back undefined/0, per spec section 5.
 
-import { toNumber, readOptional } from './csv.js';
+import { toNumber, readOptional, readColumn, tradeFeeTotal } from './csv.js';
 
 /**
  * @param {Record<string,string>} row  One row from the `fills` CSV.
  * @param {string|number} propAccountId  Our internal prop_accounts.id.
  */
 export function normalizeFillRow(row, propAccountId) {
-  const comm = toNumber(row['Comm']);
-  const ecn = toNumber(row['Ecn Fee']);
-  const sec = toNumber(row['SEC']);
-  const taf = toNumber(row['TAF']);
-  const nscc = toNumber(row['NSCC']);
-  const clr = toNumber(row['Clr']);
-  const misc = toNumber(row['Misc']);
+  // Column names are matched ignoring case (PropReports writes "ECN Fee", "CLR", "MISC").
+  const comm = toNumber(readColumn(row, ['Comm']));
+  const ecn = toNumber(readColumn(row, ['ECN Fee', 'Ecn']));
+  const sec = toNumber(readColumn(row, ['SEC']));
+  const taf = toNumber(readColumn(row, ['TAF']));
+  const nscc = toNumber(readColumn(row, ['NSCC']));
+  const clr = toNumber(readColumn(row, ['CLR']));
+  const misc = toNumber(readColumn(row, ['MISC']));
 
   return {
     propAccountId,
@@ -38,9 +39,9 @@ export function normalizeFillRow(row, propAccountId) {
     nsccFee: nscc,
     clrFee: clr,
     miscFee: misc,
-    // Total fee is the sum of every fee/rebate column — a negative value
-    // here means the fill was a net credit (e.g. an ECN rebate).
-    totalFee: comm + ecn + sec + taf + nscc + clr + misc,
+    // Total fee is the sum of EVERY fee/rebate column (incl. CAT, ORF, NFA, ACC, FTT, which have no
+    // column of their own above) — a negative value means a net credit (e.g. an ECN rebate).
+    totalFee: tradeFeeTotal(row),
     currency: readOptional(row, ['Currency']) ?? 'USD',
     multiplier: Number(readOptional(row, ['Multiplier']) ?? 1),
     raw: row,

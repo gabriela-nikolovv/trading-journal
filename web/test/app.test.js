@@ -44,12 +44,58 @@ test('shell: five tabs (no Trades); SYNC NOW with the last-sync line under it; n
   assert.ok(!/warning|new ·|updated|null/i.test(bar), bar);
 });
 
-test('the Trading Journal logo opens the pink intro page', async () => {
-  const { $ } = await boot();
+test('the Trading Journal logo opens the trading rules page: each rule in its own card, no pink panel', async () => {
+  const { $, $$ } = await boot();
   $('#brand').click();
-  await waitFor(() => $('#intro'));
+  await waitFor(() => $$('#rules .rule-card').length === 2);
   assert.match(text($('#intro')), /Hi Gabriela/);
+  assert.deepEqual($$('#rules .rule-text').map(text), ['Max 3 trades a day.', 'Never move a stop further away.']);
+  assert.equal($('.intro-art'), null, 'no image / pink panel');
   assert.equal(document.querySelectorAll('.tab.active').length, 0);
+});
+
+test('rules: add, edit, move and delete (with a confirm step)', async () => {
+  const { $, $$, api } = await boot({}, { tab: 'home' });
+  await waitFor(() => $$('#rules .rule-card').length === 2);
+  const btn = (card, label) => [...card.querySelectorAll('button')].find((b) => b.textContent === label);
+  // add
+  $('#add-rule').click();
+  const box = await waitFor(() => $('#rules .rule-input'));
+  box.value = 'No trading in the first 5 minutes.';
+  btn(box.closest('li'), 'Save').click();
+  await waitFor(() => $$('#rules .rule-text').length === 3);
+  assert.deepEqual(api.calls.rules.at(-1), ['add', 'u1', 'No trading in the first 5 minutes.', 2]);
+  assert.equal(text($$('#rules .rule-card')[2].querySelector('.rule-num')), '3');
+  // edit
+  btn($$('#rules .rule-card')[0], 'Edit').click();
+  const edit = await waitFor(() => $('#rules .rule-input'));
+  assert.equal(edit.value, 'Max 3 trades a day.');
+  edit.value = 'Max 2 trades a day.';
+  btn(edit.closest('li'), 'Save').click();
+  await waitFor(() => text($$('#rules .rule-text')[0]) === 'Max 2 trades a day.');
+  assert.deepEqual(api.calls.rules.at(-1), ['update', 'r1', 'Max 2 trades a day.']);
+  // move down
+  $$('#rules .rule-card')[0].querySelector('[aria-label="Move down"]').click();
+  await waitFor(() => text($$('#rules .rule-text')[1]) === 'Max 2 trades a day.');
+  assert.equal(api.calls.rules.at(-1)[0], 'reorder');
+  // delete asks first; "Keep" cancels
+  btn($$('#rules .rule-card')[0], 'Delete').click();
+  assert.match(text($$('#rules .rule-card')[0]), /Delete this rule\?/);
+  btn($$('#rules .rule-card')[0], 'Delete').click();
+  await waitFor(() => $$('#rules .rule-card').length === 2);
+  assert.equal(api.calls.rules.at(-1)[0], 'delete');
+});
+
+test('rules: empty state invites the first rule; empty text is not saved', async () => {
+  const { $, $$, api } = await boot({ getRules: async () => [] }, { tab: 'home' });
+  await waitFor(() => $('.rules-empty'));
+  assert.ok(!$('.rules-empty').classList.contains('hidden'));
+  $('#add-rule').click();
+  const box = await waitFor(() => $('#rules .rule-input'));
+  box.value = '   ';
+  [...box.closest('li').querySelectorAll('button')].find((b) => b.textContent === 'Save').click();
+  await tick(30);
+  assert.equal(api.calls.rules.length, 0);
 });
 
 test('the site syncs automatically when opened, and SYNC NOW syncs again', async () => {

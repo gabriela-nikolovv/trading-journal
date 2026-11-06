@@ -1,0 +1,785 @@
+{
+ "source": "PropReports exports for FPTI000645A404, 2026-10-19 to 2026-11-04 (Totals by Date, Summary by Date, Trades, Trade Performance). Values exactly as exported.",
+ "startingAccountValue": -894.5197,
+ "days": [
+  {
+   "date": "2026-10-19",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": 6.16,
+     "totalDelta": 6.16
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.03
+    }
+   ],
+   "equitiesTotal": 6.16,
+   "dayTotal": 6.13,
+   "endBalance": -888.3897
+  },
+  {
+   "date": "2026-10-20",
+   "symbols": [
+    {
+     "symbol": "ARM",
+     "qty": 4,
+     "gross": -5.035,
+     "fees": {
+      "Comm": "0.012",
+      "ECN Fee": "0.0139",
+      "SEC": "0.02",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0.02",
+      "NSCC": "0.036",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": -5.1369,
+     "unrealizedDelta": 0,
+     "totalDelta": -5.1369
+    },
+    {
+     "symbol": "CDNA",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": 4.24,
+     "totalDelta": 4.24
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.03
+    }
+   ],
+   "equitiesTotal": -0.8969,
+   "dayTotal": -0.9269,
+   "endBalance": -889.3166
+  },
+  {
+   "date": "2026-10-21",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": 3.08,
+     "totalDelta": 3.08
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.03
+    }
+   ],
+   "equitiesTotal": 3.08,
+   "dayTotal": 3.05,
+   "endBalance": -886.2666
+  },
+  {
+   "date": "2026-10-22",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": -3.16,
+     "totalDelta": -3.16
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.03
+    }
+   ],
+   "equitiesTotal": -3.16,
+   "dayTotal": -3.19,
+   "endBalance": -889.4566
+  },
+  {
+   "date": "2026-10-23",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": 0.1,
+     "totalDelta": 0.1
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.03
+    }
+   ],
+   "equitiesTotal": 0.1,
+   "dayTotal": 0.07,
+   "endBalance": -889.3866
+  },
+  {
+   "date": "2026-10-24",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": 0,
+     "totalDelta": 0
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.03
+    }
+   ],
+   "equitiesTotal": 0,
+   "dayTotal": -0.03,
+   "endBalance": -889.4166
+  },
+  {
+   "date": "2026-10-25",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": 0,
+     "totalDelta": 0
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.03
+    }
+   ],
+   "equitiesTotal": 0,
+   "dayTotal": -0.03,
+   "endBalance": -889.4466
+  },
+  {
+   "date": "2026-10-26",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": -0.22,
+     "totalDelta": -0.22
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.03
+    }
+   ],
+   "equitiesTotal": -0.22,
+   "dayTotal": -0.25,
+   "endBalance": -889.6966
+  },
+  {
+   "date": "2026-10-27",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 3,
+     "gross": 0,
+     "fees": {
+      "Comm": "0.009",
+      "ECN Fee": "0.0064",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0.0001",
+      "TAF": "0",
+      "NSCC": "0.018",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": -0.0335,
+     "unrealizedDelta": 4.47,
+     "totalDelta": 4.4365
+    },
+    {
+     "symbol": "DOCS",
+     "qty": 14,
+     "gross": 0,
+     "fees": {
+      "Comm": "0.042",
+      "ECN Fee": "0.0175",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0.0006",
+      "TAF": "0",
+      "NSCC": "0.018",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": -0.0781,
+     "unrealizedDelta": 5.81,
+     "totalDelta": 5.7319
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.16
+    }
+   ],
+   "equitiesTotal": 10.1684,
+   "dayTotal": 10.0084,
+   "endBalance": -879.6882
+  },
+  {
+   "date": "2026-10-28",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": 8,
+     "totalDelta": 8
+    },
+    {
+     "symbol": "DOCS",
+     "qty": 0,
+     "gross": 0,
+     "fees": {
+      "Comm": "0",
+      "ECN Fee": "0",
+      "SEC": "0",
+      "CLR": "0",
+      "CAT": "0",
+      "TAF": "0",
+      "NSCC": "0",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 0,
+     "unrealizedDelta": 14.14,
+     "totalDelta": 14.14
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.16
+    },
+    {
+     "name": "Fee: Misc",
+     "amount": -77.99
+    }
+   ],
+   "equitiesTotal": 22.14,
+   "dayTotal": -56.01,
+   "endBalance": -935.6982
+  },
+  {
+   "date": "2026-10-29",
+   "symbols": [
+    {
+     "symbol": "CDNA",
+     "qty": 7,
+     "gross": 8.65,
+     "fees": {
+      "Comm": "0.021",
+      "ECN Fee": "0.0226",
+      "SEC": "0.02",
+      "CLR": "0",
+      "CAT": "0.0002",
+      "TAF": "0.02",
+      "NSCC": "0.027",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 8.5392,
+     "unrealizedDelta": -19.45,
+     "totalDelta": -10.9108
+    },
+    {
+     "symbol": "DOCS",
+     "qty": 4,
+     "gross": 5.76,
+     "fees": {
+      "Comm": "0.012",
+      "ECN Fee": "-0.0048",
+      "SEC": "0.01",
+      "CLR": "0",
+      "CAT": "0.0002",
+      "TAF": "0.01",
+      "NSCC": "0.009",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 5.7236,
+     "unrealizedDelta": -12,
+     "totalDelta": -6.2764
+    },
+    {
+     "symbol": "GEN",
+     "qty": 20,
+     "gross": 10.1,
+     "fees": {
+      "Comm": "0.06",
+      "ECN Fee": "0.016",
+      "SEC": "0.01",
+      "CLR": "0",
+      "CAT": "0.001",
+      "TAF": "0.01",
+      "NSCC": "0.018",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 9.985,
+     "unrealizedDelta": 0,
+     "totalDelta": 9.985
+    }
+   ],
+   "fees": [
+    {
+     "name": "Fee: Daily Interest",
+     "amount": -0.06
+    }
+   ],
+   "equitiesTotal": -7.2022,
+   "dayTotal": -7.2622,
+   "endBalance": -942.9604
+  },
+  {
+   "date": "2026-10-30",
+   "symbols": [
+    {
+     "symbol": "AZN",
+     "qty": 10,
+     "gross": 10.6,
+     "fees": {
+      "Comm": "0.03",
+      "ECN Fee": "0.012",
+      "SEC": "0.02",
+      "CLR": "0",
+      "CAT": "0.0004",
+      "TAF": "0.01",
+      "NSCC": "0.018",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": 10.5096,
+     "unrealizedDelta": 0,
+     "totalDelta": 10.5096
+    },
+    {
+     "symbol": "CDNA",
+     "qty": 6,
+     "gross": -5.25,
+     "fees": {
+      "Comm": "0.018",
+      "ECN Fee": "0.0075",
+      "SEC": "0.01",
+      "CLR": "0",
+      "CAT": "0.0002",
+      "TAF": "0.01",
+      "NSCC": "0.027",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": -5.3227,
+     "unrealizedDelta": 0,
+     "totalDelta": -5.3227
+    },
+    {
+     "symbol": "DOCS",
+     "qty": 10,
+     "gross": -0.45,
+     "fees": {
+      "Comm": "0.03",
+      "ECN Fee": "0.037",
+      "SEC": "0.02",
+      "CLR": "0",
+      "CAT": "0.0004",
+      "TAF": "0.02",
+      "NSCC": "0.018",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": -0.5754,
+     "unrealizedDelta": -7.95,
+     "totalDelta": -8.5254
+    },
+    {
+     "symbol": "MDLZ",
+     "qty": 10,
+     "gross": -11.1,
+     "fees": {
+      "Comm": "0.03",
+      "ECN Fee": "0.0125",
+      "SEC": "0.01",
+      "CLR": "0",
+      "CAT": "0.0004",
+      "TAF": "0.01",
+      "NSCC": "0.018",
+      "NFA": "0",
+      "ORF": "0",
+      "MISC": "0",
+      "ACC": "0"
+     },
+     "net": -11.1809,
+     "unrealizedDelta": 0,
+     "totalDelta": -11.1809
+    }
+   ],
+   "fees": [],
+   "equitiesTotal": -14.5194,
+   "dayTotal": -14.5194,
+   "endBalance": -957.4798
+  },
+  {
+   "date": "2026-11-01",
+   "symbols": [],
+   "fees": [
+    {
+     "name": "Fee: Market Data",
+     "amount": -21
+    },
+    {
+     "name": "Fee: Platform",
+     "amount": -29.95
+    }
+   ],
+   "equitiesTotal": 0,
+   "dayTotal": -50.95,
+   "endBalance": -1008.4298
+  }
+ ],
+ "trades": [
+  {
+   "symbol": "ARM",
+   "type": "Short",
+   "qty": 2,
+   "gross": -5.035,
+   "fees": {
+    "Comm": "0.012",
+    "ECN Fee": "0.0139",
+    "SEC": "0.02",
+    "CLR": "0",
+    "CAT": "0",
+    "TAF": "0.02",
+    "NSCC": "0.036",
+    "NFA": "0",
+    "ORF": "0",
+    "MISC": "0",
+    "ACC": "0"
+   },
+   "net": -5.1369
+  },
+  {
+   "symbol": "CDNA",
+   "type": "Long",
+   "qty": 10,
+   "gross": 53.51,
+   "fees": {
+    "Comm": "0.06",
+    "ECN Fee": "0.03079999",
+    "SEC": "0.0367",
+    "CLR": "0",
+    "CAT": "0.0008",
+    "TAF": "0.036667",
+    "NSCC": "0.078",
+    "NFA": "0",
+    "ORF": "0",
+    "MISC": "0",
+    "ACC": "0"
+   },
+   "net": 53.26703301
+  },
+  {
+   "symbol": "GEN",
+   "type": "Long",
+   "qty": 10,
+   "gross": 10.1,
+   "fees": {
+    "Comm": "0.06",
+    "ECN Fee": "0.016",
+    "SEC": "0.01",
+    "CLR": "0",
+    "CAT": "0.001",
+    "TAF": "0.01",
+    "NSCC": "0.018",
+    "NFA": "0",
+    "ORF": "0",
+    "MISC": "0",
+    "ACC": "0"
+   },
+   "net": 9.985
+  },
+  {
+   "symbol": "CDNA",
+   "type": "Short",
+   "qty": 1,
+   "gross": -0.39,
+   "fees": {
+    "Comm": "0.006",
+    "ECN Fee": "0.00559999",
+    "SEC": "0.0033",
+    "CLR": "0",
+    "CAT": "0",
+    "TAF": "0.003333",
+    "NSCC": "0.012",
+    "NFA": "0",
+    "ORF": "0",
+    "MISC": "0",
+    "ACC": "0"
+   },
+   "net": -0.42023299
+  },
+  {
+   "symbol": "DOCS",
+   "type": "Long",
+   "qty": 14,
+   "gross": 5.31,
+   "fees": {
+    "Comm": "0.084",
+    "ECN Fee": "0.0497",
+    "SEC": "0.03",
+    "CLR": "0",
+    "CAT": "0.0012",
+    "TAF": "0.03",
+    "NSCC": "0.045",
+    "NFA": "0",
+    "ORF": "0",
+    "MISC": "0",
+    "ACC": "0"
+   },
+   "net": 5.0701
+  },
+  {
+   "symbol": "MDLZ",
+   "type": "Long",
+   "qty": 5,
+   "gross": -11.1,
+   "fees": {
+    "Comm": "0.03",
+    "ECN Fee": "0.0125",
+    "SEC": "0.01",
+    "CLR": "0",
+    "CAT": "0.0004",
+    "TAF": "0.01",
+    "NSCC": "0.018",
+    "NFA": "0",
+    "ORF": "0",
+    "MISC": "0",
+    "ACC": "0"
+   },
+   "net": -11.1809
+  },
+  {
+   "symbol": "AZN",
+   "type": "Long",
+   "qty": 5,
+   "gross": 10.6,
+   "fees": {
+    "Comm": "0.03",
+    "ECN Fee": "0.012",
+    "SEC": "0.02",
+    "CLR": "0",
+    "CAT": "0.0004",
+    "TAF": "0.01",
+    "NSCC": "0.018",
+    "NFA": "0",
+    "ORF": "0",
+    "MISC": "0",
+    "ACC": "0"
+   },
+   "net": 10.5096
+  },
+  {
+   "symbol": "CDNA",
+   "type": "Long",
+   "qty": 3,
+   "gross": -5.25,
+   "fees": {
+    "Comm": "0.018",
+    "ECN Fee": "0.0075",
+    "SEC": "0.01",
+    "CLR": "0",
+    "CAT": "0.0002",
+    "TAF": "0.01",
+    "NSCC": "0.027",
+    "NFA": "0",
+    "ORF": "0",
+    "MISC": "0",
+    "ACC": "0"
+   },
+   "net": -5.3227
+  }
+ ],
+ "periodTotals": {
+  "gross": 13.275,
+  "tradeFees": 0.8451,
+  "net": 12.4299,
+  "adjFees": -129.56,
+  "unrealizedDelta": 3.22,
+  "totalDelta": -113.9101,
+  "endBalance": -1008.4298
+ },
+ "tradePerformance": {
+  "winLossNetRealized": 56.77100002,
+  "trades": 8
+ }
+}

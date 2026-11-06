@@ -98,3 +98,18 @@ select 'gabi' as who, (select count(*) from daily_symbol_pnl) as symbol_days, (s
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 select 'user B' as who, (select count(*) from daily_symbol_pnl) as symbol_days, (select count(*) from position_lots) as lots;
 reset role;
+
+-- 9) 0008 trading_rules: private to their owner; user_id defaults to the signed-in user; empty rule rejected.
+\echo '[9] trading_rules — Gabi sees her 1 rule, user B sees 0'
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+insert into trading_rules (body, position) values ('Max 3 trades a day.', 0);
+select 'gabi' as who, count(*) as rules, bool_and(user_id = '11111111-1111-1111-1111-111111111111') as owned from trading_rules;
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+select 'user B' as who, count(*) as rules from trading_rules;
+\echo 'EXPECTED ERROR — user B tagging a rule as Gabi must be rejected by RLS'
+insert into trading_rules (user_id, body) values ('11111111-1111-1111-1111-111111111111', 'Not mine');
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+\echo 'EXPECTED ERROR — an empty rule must be rejected'
+insert into trading_rules (body) values ('   ');
+reset role;

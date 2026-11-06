@@ -119,6 +119,22 @@ export function createApi(sb) {
       must(await sb.from('daily_comments').upsert({ prop_account_id: accountId, user_id: userId, trade_date: date, comment: comment.trim(), updated_at: new Date().toISOString() }, { onConflict: 'prop_account_id,trade_date' }));
     },
 
+    // ---------- trading rules (home page) ----------
+    async getRules() {
+      return must(await sb.from('trading_rules').select('id, body, position').order('position').order('created_at')).map((r) => ({ id: r.id, text: r.body, position: r.position }));
+    },
+    async addRule(userId, text, position) {
+      return must(await sb.from('trading_rules').insert({ user_id: userId, body: text.trim(), position }).select('id').single()).id;
+    },
+    async updateRule(id, text) {
+      must(await sb.from('trading_rules').update({ body: text.trim(), updated_at: new Date().toISOString() }).eq('id', id));
+    },
+    async deleteRule(id) { must(await sb.from('trading_rules').delete().eq('id', id)); },
+    /** Saves the order shown on screen: ids in their new order. */
+    async reorderRules(ids) {
+      for (const [i, id] of ids.entries()) must(await sb.from('trading_rules').update({ position: i }).eq('id', id));
+    },
+
     // ---------- profit share ----------
     async getProfitShareSchedule() { return must(await sb.from('profit_share_schedule').select('pct, effective_from').order('effective_from')).map((r) => ({ pct: Number(r.pct), effectiveFrom: r.effective_from })); },
     async saveProfitShare(userId, pct, effectiveFrom) {

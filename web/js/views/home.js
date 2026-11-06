@@ -1,26 +1,91 @@
-// Intro page, opened from the "Trading Journal" logo. Deliberately simple for now: a pink welcome
-// with room for an image. To use your own picture, put it in web/assets/ as intro.jpg (or .png and
-// change INTRO_IMAGE below) — until the file exists, the pink panel is shown on its own.
-import { h, clear } from '../lib.js';
+// Home page, opened from the "Trading Journal" logo: the trading rules to read before each session.
+// The rules are written by the user and stored in `trading_rules` (migration 0008); each one sits in
+// its own card and can be edited, moved, deleted, or added with "Add rule".
+import { h, clear, toast } from '../lib.js';
 import { parseAccountLabel } from '../engine/weeklyReport.js';
 
-const INTRO_IMAGE = 'assets/intro.jpg';
-
 export async function render(container, ctx) {
-  const name = ctx.state.account ? parseAccountLabel(ctx.state.account.account_code, ctx.state.account.propreports_account_name).name : '';
-  const art = h('div', { class: 'intro-art' });
-  const img = document.createElement('img');
-  img.alt = '';
-  img.onload = () => { art.classList.add('has-image'); art.append(img); };
-  img.src = INTRO_IMAGE;
+  const { api, state } = ctx;
+  const name = state.account ? parseAccountLabel(state.account.account_code, state.account.propreports_account_name).name : '';
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+
+  let rules = [];
+  let loadError = false;
+  try { rules = await api.getRules(); } catch (e) { loadError = true; console.error(e); }
+  let editing = null;   // rule id being edited, or 'new'
+  let confirming = null; // rule id waiting for "Delete?" confirmation
+
+  const list = h('ol', { class: 'rules', id: 'rules' });
+  const addBtn = h('button', { class: 'btn rules-add', id: 'add-rule', onclick: () => { editing = 'new'; confirming = null; draw(); } }, '+ Add rule');
+
+  function editor(initial, onSave) {
+    const box = h('textarea', { class: 'rule-input', rows: 2, placeholder: 'e.g. No new positions after 15:30.', 'aria-label': 'Rule' });
+    box.value = initial;
+    const save = async () => {
+      if (!box.value.trim()) { toast('Write the rule first.', 'error'); return; }
+      try { await onSave(box.value); editing = null; draw(); } catch (e) { toast('Could not save the rule.', 'error'); console.error(e); }
+    };
+    const cancel = () => { editing = null; draw(); };
+    box.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
+      if (e.key === 'Escape') cancel();
+    });
+    setTimeout(() => { box.focus(); box.setSelectionRange?.(box.value.length, box.value.length); }, 0);
+    return h('div', { class: 'rule-edit' }, box,
+      h('div', { class: 'rule-actions' },
+        h('button', { class: 'btn primary small', onclick: save }, 'Save'),
+        h('button', { class: 'btn small', onclick: cancel }, 'Cancel')));
+  }
+
+  async function move(i, dir) {
+    const j = i + dir;
+    if (j < 0 || j >= rules.length) return;
+    [rules[i], rules[j]] = [rules[j], rules[i]];
+    draw();
+    try { await api.reorderRules(rules.map((r) => r.id)); } catch (e) { toast('Could not save the new order.', 'error'); console.error(e); }
+  }
+
+  function card(r, i) {
+    const n = h('span', { class: 'rule-num' }, String(i + 1));
+    if (editing === r.id) {
+      return h('li', { class: 'rule-card editing', 'data-id': r.id }, n, editor(r.text, async (text) => { await api.updateRule(r.id, text); r.text = text.trim(); }));
+    }
+    const actions = confirming === r.id
+      ? h('div', { class: 'rule-actions' },
+        h('span', { class: 'muted small' }, 'Delete this rule?'),
+        h('button', { class: 'btn small danger', onclick: async () => {
+          try { await api.deleteRule(r.id); rules = rules.filter((x) => x.id !== r.id); confirming = null; draw(); } catch (e) { toast('Could not delete the rule.', 'error'); console.error(e); }
+        } }, 'Delete'),
+        h('button', { class: 'btn small', onclick: () => { confirming = null; draw(); } }, 'Keep'))
+      : h('div', { class: 'rule-actions' },
+        h('button', { class: 'link-btn', title: 'Move up', 'aria-label': 'Move up', disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
+        h('button', { class: 'link-btn', title: 'Move down', 'aria-label': 'Move down', disabled: i === rules.length - 1, onclick: () => move(i, 1) }, '↓'),
+        h('button', { class: 'link-btn', onclick: () => { editing = r.id; confirming = null; draw(); } }, 'Edit'),
+        h('button', { class: 'link-btn', onclick: () => { confirming = r.id; editing = null; draw(); } }, 'Delete'));
+    return h('li', { class: 'rule-card', 'data-id': r.id }, n, h('p', { class: 'rule-text' }, r.text), actions);
+  }
+
+  function draw() {
+    clear(list);
+    rules.forEach((r, i) => list.append(card(r, i)));
+    if (editing === 'new') {
+      list.append(h('li', { class: 'rule-card editing' }, h('span', { class: 'rule-num' }, String(rules.length + 1)),
+        editor('', async (text) => {
+          const position = rules.length;
+          const id = await api.addRule(state.userId, text, position);
+          rules.push({ id, text: text.trim(), position });
+        })));
+    }
+    empty.classList.toggle('hidden', rules.length > 0 || editing === 'new' || loadError);
+    addBtn.classList.toggle('hidden', editing === 'new');
+  }
+
+  const empty = h('p', { class: 'rules-empty muted' }, 'No rules yet. Add the boundaries you want to read before every session.');
   clear(container).append(h('section', { class: 'intro', id: 'intro' },
-    art,
-    h('div', { class: 'intro-text' },
-      h('div', { class: 'intro-kicker' }, today),
-      h('h1', {}, name ? `Hi ${name.split(' ')[0]} 💗` : 'Hi there 💗'),
-      h('p', {}, 'Your trading journal. Pick up where you left off.'),
-      h('div', { class: 'intro-links' },
-        [['dashboard', 'Dashboard'], ['positions', 'Current positions'], ['calendar', 'Calendar'], ['weekly', 'Weekly report']]
-          .map(([id, label]) => h('button', { class: 'btn intro-btn', onclick: () => ctx.navigate(id) }, label))))));
+    h('div', { class: 'intro-kicker' }, today),
+    h('h1', {}, name ? `Hi ${name.split(' ')[0]}` : 'Hi there'),
+    h('p', { class: 'intro-sub' }, 'Your rules for today’s session.'),
+    loadError ? h('p', { class: 'notice' }, 'Your rules could not be loaded. Check your connection and open this page again.') : null,
+    empty, list, addBtn));
+  draw();
 }

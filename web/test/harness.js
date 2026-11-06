@@ -27,7 +27,7 @@ const sectors = Object.keys(TRADINGVIEW_TAXONOMY).map((name, i) => ({ id: `s${i}
 const industries = Object.entries(TRADINGVIEW_TAXONOMY).flatMap(([sector, v], i) => [...v.confirmed, ...v.recalled].map((name, j) => ({ id: `i${i}-${j}`, name, sector_id: `s${i}` })));
 
 export function makeFakeApi(over = {}) {
-  const calls = { updatePosition: [], updateLot: [], saveLots: [], saveComment: [], saveWeekly: [], saveProfit: [], runSync: 0, getPositions: 0 };
+  const calls = { updatePosition: [], updateLot: [], saveLots: [], saveComment: [], saveWeekly: [], saveProfit: [], rules: [], runSync: 0, getPositions: 0 };
   const T = (o) => ({ id: o.id, symbol: o.symbol, direction: o.direction ?? 'long', status: 'closed', openQuantity: 0, quantityTraded: 40, avgEntryPrice: 5, avgExitPrice: 5.5, realizedPnl: o.pnl, feesAllocated: 0.1, openedAt: new Date(o.open), closedAt: new Date(o.close), stopLoss: null, notes: null, sector: 'Health Technology', industry: 'Biotechnology', sectorId: 's11', industryId: 'i11-2', multiplier: 1 });
   const closed = [T({ id: 't1', symbol: 'WIN', pnl: 23.18, open: '2026-08-18T14:00:00Z', close: '2026-09-04T19:00:00Z' }), T({ id: 't2', symbol: 'LOSS', pnl: -0.0416, open: '2026-09-03T14:00:00Z', close: '2026-09-03T14:05:00Z' })];
   const api = {
@@ -65,6 +65,12 @@ export function makeFakeApi(over = {}) {
     getSectors: async () => sectors, getIndustries: async () => industries,
     getDailyComments: async () => [{ date: '2026-09-04', comment: 'Waited for the right entry.' }],
     saveDailyComment: async (...a) => { calls.saveComment.push(a); },
+    rules: [{ id: 'r1', text: 'Max 3 trades a day.', position: 0 }, { id: 'r2', text: 'Never move a stop further away.', position: 1 }],
+    async getRules() { return this.rules.map((r) => ({ ...r })); },
+    async addRule(userId, text, position) { calls.rules.push(['add', userId, text, position]); const id = `r${this.rules.length + 10}`; this.rules.push({ id, text, position }); return id; },
+    async updateRule(id, text) { calls.rules.push(['update', id, text]); this.rules.find((r) => r.id === id).text = text; },
+    async deleteRule(id) { calls.rules.push(['delete', id]); this.rules = this.rules.filter((r) => r.id !== id); },
+    async reorderRules(ids) { calls.rules.push(['reorder', ids]); },
     getProfitShareSchedule: async () => [{ pct: 50, effectiveFrom: '2000-01-01' }],
     saveProfitShare: async (...a) => { calls.saveProfit.push(a); },
     getWeeklyReport: async () => null, saveWeeklyReport: async (r) => { calls.saveWeekly.push(r); },

@@ -16,6 +16,16 @@ import { reconstructAllPositions } from './positionEngine.js';
 import { planWindows, addDays } from './syncPlanner.js';
 import { buildDailySnapshots } from './dailySnapshots.js';
 import { redactToken } from './propreportsClient.js';
+import { toNumber } from './csv.js';
+
+/** ISO day (YYYY-MM-DD) out of 2026-08-01 / 2026-08-01 09:00:00 / 08/01/2026 style values; null otherwise. */
+function isoDay(v) {
+  const s = String(v ?? '').trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+  return m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : null;
+}
 
 const REQUIRED_FILL_COLUMNS = ['Date/Time', 'Symbol', 'Price'];
 const REQUIRED_ADJ_COLUMNS = ['Date', 'Amount'];
@@ -112,9 +122,8 @@ export async function runSync({ client, store, today, token, forceFull = false, 
     let creationDate = null;
     if (isFullHistory && client.listAccounts) {
       const row = (await client.listAccounts()).find((a) => String(a['Account Id']) === String(account.propreportsAccountId));
-      if (!firstTradedDate) firstTradedDate = row?.['First Traded'] || null;
-      const c = String(row?.['Creation Date'] ?? row?.['Created'] ?? '').slice(0, 10);
-      creationDate = /^\d{4}-\d{2}-\d{2}$/.test(c) ? c : null;
+      if (!firstTradedDate) firstTradedDate = isoDay(row?.['First Traded']);
+      creationDate = isoDay(row?.['Creation Date'] ?? row?.['Created']);
     }
     const windows = planWindows({
       today,
@@ -131,8 +140,11 @@ export async function runSync({ client, store, today, token, forceFull = false, 
     const posRows = [];
     // Charges can be posted before the first trade (sign-up / first-month fees). They still reduce the
     // balance PropReports reports, so on a full sync also read adjustments from the account's creation date.
-    if (isFullHistory && creationDate && firstTradedDate && creationDate < firstTradedDate) {
-      adjRows.push(...(await client.fetchAdjustments(account.propreportsAccountId, creationDate, addDays(firstTradedDate, -1))));
+    // If the creation date is not returned, look one year back: adjustments are few, and a monthly fee
+    // posted before the first trade otherwise never reaches any day (it only shows up in the balance).
+    const preStart = creationDate ?? (firstTradedDate ? addDays(firstTradedDate, -366) : null);
+    if (isFullHistory && preStart && firstTradedDate && preStart < firstTradedDate) {
+      adjRows.push(...(await client.fetchAdjustments(account.propreportsAccountId, preStart, addDays(firstTradedDate, -1))));
     }
     for (const w of windows) {
       fillRows.push(...(await client.fetchFills(account.propreportsAccountId, w.startDate, w.endDate)));
@@ -205,13 +217,14 @@ export async function runSync({ client, store, today, token, forceFull = false, 
     let accountInfo = null;
     if (client.listAccounts) {
       const row = (await client.listAccounts()).find((a) => String(a['Account Id']) === String(account.propreportsAccountId));
-      if (row && row['Cash'] !== '' && row['Cash'] !== undefined) accountInfo = { cash: Number(row['Cash']), unrealized: Number(row['Unrealized'] || 0) };
+      if (row && row['Cash'] !== '' && row['Cash'] !== undefined) accountInfo = { cash: toNumber(row['Cash']), unrealized: toNumber(row['Unrealized']) };
     }
     const fillCostsByDate = new Map();
     const fillCostsByDateSymbol = new Map();
     for (const f of fills) {
-      fillCostsByDate.set(f.tradeDate, (fillCostsByDate.get(f.tradeDate) ?? 0) + (f.totalFee ?? 0));
-      const k = `${f.tradeDate}|${String(f.symbol).toUpperCase()}`;
+      const d = isoDay(f.tradeDate) ?? f.tradeDate; // same YYYY-MM-DD keys as the positions rows
+      fillCostsByDate.set(d, (fillCostsByDate.get(d) ?? 0) + (f.totalFee ?? 0));
+      const k = `${d}|${String(f.symbol).trim().toUpperCase()}`;
       fillCostsByDateSymbol.set(k, (fillCostsByDateSymbol.get(k) ?? 0) + (f.totalFee ?? 0));
     }
     const snap = buildDailySnapshots({
@@ -220,7 +233,6 @@ export async function runSync({ client, store, today, token, forceFull = false, 
       startingAccountValue: await store.getAccountValueBefore(rangeStart),
       fillCostsByDate,
       fillCostsByDateSymbol,
-      reportedAccountValue: accountInfo ? accountInfo.cash + accountInfo.unrealized : null,
     });
     warnings.push(...snap.warnings);
 
@@ -233,6 +245,15 @@ export async function runSync({ client, store, today, token, forceFull = false, 
       const offset = Math.round((reported - snap.rows.at(-1).accountValue) * 10000) / 10000;
       if (Math.abs(offset) > 0.005) {
         for (const r of snap.rows) r.accountValue = Math.round((r.accountValue + offset) * 10000) / 10000;
+        if (isFullHistory && Math.abs(offset) > 0.05) {
+          // A full download starts from 0, so whatever is left is money PropReports counted that no
+          // downloaded day contains (a charge or deposit outside the downloaded dates, or a fee column
+          // the journal does not read). Shown in Settings → Synchronization so it can be traced.
+          warnings.push({
+            type: 'history_gap',
+            message: `PropReports’ Cash + Unrealized (${reported.toFixed(2)}) includes ${offset.toFixed(2)} that is not in any downloaded day. The daily results add up to ${(reported - offset).toFixed(2)}.`,
+          });
+        }
         if (!isFullHistory && Math.abs(offset) > 0.05) {
           warnings.push({
             type: 'account_value_anchored',
@@ -251,7 +272,6 @@ export async function runSync({ client, store, today, token, forceFull = false, 
       adjustmentsNew: adjDiff.inserts.length,
       adjustmentsUpdated: adjDiff.replacements.length,
       snapshotDays: snap.rows.length,
-      feeMode: snap.feeMode,
       positionsDetected: instances.length,
       openPositions: instances.filter((p) => p.status === 'open').length,
     };
@@ -268,7 +288,15 @@ export async function runSync({ client, store, today, token, forceFull = false, 
       stats,
       warnings,
     });
-    return { ok: true, runId, ...stats, warnings };
+    // Debug aid: the exact column names PropReports sent this time (no values, no token). The sync
+    // Edge Function logs this, so a renamed or new fee column can be seen on the next sync.
+    const diagnostics = {
+      columns: { fills: Object.keys(fillRows[0] ?? {}), positions: Object.keys(posRows[0] ?? {}), adjustments: Object.keys(adjRows[0] ?? {}) },
+      adjustmentCategories: [...new Set(adjustments.map((a) => `${a.categoryName} → ${a.categoryType}`))],
+      // Stocks/days where the positions row's fees differ from the fills' (the fills are used).
+      feeSourceDiffs: snap.feeSourceDiffs.slice(0, 50),
+    };
+    return { ok: true, runId, ...stats, warnings, diagnostics };
   } catch (err) {
     const message = err.userMessage ?? err.message ?? 'Unknown error';
     await store.failRun(runId, {
