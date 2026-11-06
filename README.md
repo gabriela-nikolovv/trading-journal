@@ -4,8 +4,8 @@
 
 ## 6 Nov 2026 — trading rules home page + per-stock fees from the fills
 
-- **Home page** (the "Trading Journal" logo) is now **your trading rules**: one card per rule, Add rule,
-  Edit, ↑/↓ to reorder, Delete (asks first). Stored in `trading_rules` → run migration **0008_trading_rules.sql**.
+- **Home page** (the "Trading Journal" logo) is now **Rules**: cards in a row (like the Dashboard), pink Add rule top right;
+  tap a card for ←/→ (reorder), Edit, Delete (asks first). Rules are kept until deleted. Stored in `trading_rules` → run migration **0008_trading_rules.sql**.
 - **Per-stock fees** now come from the **fills of that day** (dated by execution, as Totals by Date books them);
   the positions rows' fee columns are used only on a day with no fills. 27 Oct 2026: CDNA / DOCS Gross 0,
   Net (0.03) / (0.08). Every sync logs `feeSourceDiffs` (where the positions rows disagreed) under

@@ -177,27 +177,27 @@ table.breakdown td:first-child { color: var(--muted); }
 .stat-group h4 { margin: 0 0 .3rem; font-size: .78rem; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
 .stat-row { display: flex; justify-content: space-between; gap: 1rem; padding: .28rem 0; border-bottom: 1px solid #f3f4f6; font-variant-numeric: tabular-nums; }
 
-/* home page — trading rules (clean: white cards, baby-pink accents only) */
-.intro { max-width: 760px; margin: 1.5rem auto 3rem; }
-.intro h1 { font-size: 2rem; font-weight: 700; margin: .25rem 0 .2rem; }
-.intro-sub { color: var(--muted); margin: 0 0 1.6rem; }
+/* home page — trading rules: a row of cards like the Dashboard's, baby-pink accents only */
+.intro { margin: .5rem 0 2rem; }
+.rules-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1rem; }
+.intro h1 { font-size: 1.8rem; font-weight: 700; margin: .2rem 0 0; }
 .intro-kicker { text-transform: uppercase; letter-spacing: .12em; font-size: .74rem; font-weight: 700; color: var(--muted); }
-.rules { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
-.rule-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .9rem; align-items: start;
-  background: #fff; border: 1px solid var(--line); border-left: 3px solid #f7cfe1; border-radius: 12px; padding: 1rem 1.1rem; }
-.rule-card.editing { grid-template-columns: auto minmax(0, 1fr); border-left-color: #eeaecb; }
-.rule-num { width: 1.9rem; height: 1.9rem; border-radius: 50%; background: #fdf1f7; color: #b04a7d; font-weight: 700; font-size: .9rem;
-  display: inline-flex; align-items: center; justify-content: center; }
-.rule-text { margin: .25rem 0 0; font-size: 1.05rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.rule-actions { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
-.rule-edit .rule-actions { margin-top: .5rem; }
+.rules-add { white-space: nowrap; }
+.rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); align-items: stretch; }
+.rule-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 1rem; min-height: 96px; display: flex; flex-direction: column; justify-content: space-between; gap: .6rem; cursor: pointer; }
+.rule-card:hover { border-color: #f3c6db; }
+.rule-card:focus-visible { outline: none; border-color: #eeaecb; box-shadow: 0 0 0 3px #fdf1f7; }
+.rule-card.selected { border-color: #eeaecb; box-shadow: 0 0 0 3px #fdf1f7; }
+.rule-card.editing { cursor: default; border-color: #eeaecb; }
+.rule-text { margin: 0; font-size: 1rem; font-weight: 600; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rule-actions { display: flex; gap: .25rem; align-items: center; flex-wrap: wrap; border-top: 1px solid #f3f4f6; padding-top: .5rem; }
+.rule-edit .rule-actions { border-top: 0; padding-top: 0; margin-top: .5rem; }
 .link-btn { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: .82rem; padding: .25rem .4rem; border-radius: 6px; cursor: pointer; }
 .link-btn:hover:not(:disabled) { color: var(--text); background: #f4f4f6; }
 .link-btn:disabled { opacity: .3; cursor: default; }
-.rule-input { width: 100%; font: inherit; font-size: 1.05rem; line-height: 1.5; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
+.rule-input { width: 100%; font: inherit; font-size: 1rem; line-height: 1.45; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
 .rule-input:focus { outline: none; border-color: #eeaecb; box-shadow: 0 0 0 3px #fdf1f7; }
-.rules-add { margin-top: .9rem; width: 100%; border-style: dashed; color: var(--muted); background: transparent; padding: .75rem; }
-.rules-add:hover { border-color: #eeaecb; color: #b04a7d; background: #fffafc; }
 .rules-empty { margin: 0 0 .25rem; }
 
 /* ---------- Weekly report ---------- */
@@ -225,7 +225,6 @@ table.breakdown td:first-child { color: var(--muted); }
   .breakdowns { grid-template-columns: 1fr; }
   .period-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rule-card { grid-template-columns: auto minmax(0, 1fr); } .rule-card > .rule-actions { grid-column: 2; }
   .positions-layout, .report-layout { grid-template-columns: 1fr; }
   .exposure-card { aspect-ratio: auto; }
   .cal-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }

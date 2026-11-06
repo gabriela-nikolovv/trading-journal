@@ -1,12 +1,10 @@
 // Home page, opened from the "Trading Journal" logo: the trading rules to read before each session.
-// The rules are written by the user and stored in `trading_rules` (migration 0008); each one sits in
-// its own card and can be edited, moved, deleted, or added with "Add rule".
+// The rules are written by the user and stored in `trading_rules` (migration 0008) — kept until deleted.
+// Each rule is a card in a row of cards (like the Dashboard's); tapping a card shows Edit / Delete.
 import { h, clear, toast } from '../lib.js';
-import { parseAccountLabel } from '../engine/weeklyReport.js';
 
 export async function render(container, ctx) {
   const { api, state } = ctx;
-  const name = state.account ? parseAccountLabel(state.account.account_code, state.account.propreports_account_name).name : '';
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
   let rules = [];
@@ -14,9 +12,10 @@ export async function render(container, ctx) {
   try { rules = await api.getRules(); } catch (e) { loadError = true; console.error(e); }
   let editing = null;   // rule id being edited, or 'new'
   let confirming = null; // rule id waiting for "Delete?" confirmation
+  let selected = null;   // rule id whose Edit / Delete are shown (after a tap)
 
   const list = h('ol', { class: 'rules', id: 'rules' });
-  const addBtn = h('button', { class: 'btn rules-add', id: 'add-rule', onclick: () => { editing = 'new'; confirming = null; draw(); } }, '+ Add rule');
+  const addBtn = h('button', { class: 'btn primary small rules-add', id: 'add-rule', onclick: () => { editing = 'new'; confirming = null; selected = null; draw(); } }, '+ Add rule');
 
   function editor(initial, onSave) {
     const box = h('textarea', { class: 'rule-input', rows: 2, placeholder: 'e.g. No new positions after 15:30.', 'aria-label': 'Rule' });
@@ -46,9 +45,8 @@ export async function render(container, ctx) {
   }
 
   function card(r, i) {
-    const n = h('span', { class: 'rule-num' }, String(i + 1));
     if (editing === r.id) {
-      return h('li', { class: 'rule-card editing', 'data-id': r.id }, n, editor(r.text, async (text) => { await api.updateRule(r.id, text); r.text = text.trim(); }));
+      return h('li', { class: 'rule-card editing', 'data-id': r.id }, editor(r.text, async (text) => { await api.updateRule(r.id, text); r.text = text.trim(); }));
     }
     const actions = confirming === r.id
       ? h('div', { class: 'rule-actions' },
@@ -58,18 +56,23 @@ export async function render(container, ctx) {
         } }, 'Delete'),
         h('button', { class: 'btn small', onclick: () => { confirming = null; draw(); } }, 'Keep'))
       : h('div', { class: 'rule-actions' },
-        h('button', { class: 'link-btn', title: 'Move up', 'aria-label': 'Move up', disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
-        h('button', { class: 'link-btn', title: 'Move down', 'aria-label': 'Move down', disabled: i === rules.length - 1, onclick: () => move(i, 1) }, '↓'),
-        h('button', { class: 'link-btn', onclick: () => { editing = r.id; confirming = null; draw(); } }, 'Edit'),
+        h('button', { class: 'link-btn', title: 'Move earlier', 'aria-label': 'Move up', disabled: i === 0, onclick: () => move(i, -1) }, '←'),
+        h('button', { class: 'link-btn', title: 'Move later', 'aria-label': 'Move down', disabled: i === rules.length - 1, onclick: () => move(i, 1) }, '→'),
+        h('button', { class: 'link-btn', onclick: () => { editing = r.id; confirming = null; selected = null; draw(); } }, 'Edit'),
         h('button', { class: 'link-btn', onclick: () => { confirming = r.id; editing = null; draw(); } }, 'Delete'));
-    return h('li', { class: 'rule-card', 'data-id': r.id }, n, h('p', { class: 'rule-text' }, r.text), actions);
+    const open = selected === r.id || confirming === r.id;
+    const li = h('li', { class: `rule-card${open ? ' selected' : ''}`, 'data-id': r.id, tabindex: 0 }, h('p', { class: 'rule-text' }, r.text), open ? actions : null);
+    const toggle = (e) => { if (e.target.closest('button')) return; selected = open ? null : r.id; confirming = null; draw(); };
+    li.addEventListener('click', toggle);
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(e); } });
+    return li;
   }
 
   function draw() {
     clear(list);
     rules.forEach((r, i) => list.append(card(r, i)));
     if (editing === 'new') {
-      list.append(h('li', { class: 'rule-card editing' }, h('span', { class: 'rule-num' }, String(rules.length + 1)),
+      list.append(h('li', { class: 'rule-card editing' },
         editor('', async (text) => {
           const position = rules.length;
           const id = await api.addRule(state.userId, text, position);
@@ -77,15 +80,14 @@ export async function render(container, ctx) {
         })));
     }
     empty.classList.toggle('hidden', rules.length > 0 || editing === 'new' || loadError);
-    addBtn.classList.toggle('hidden', editing === 'new');
   }
 
   const empty = h('p', { class: 'rules-empty muted' }, 'No rules yet. Add the boundaries you want to read before every session.');
   clear(container).append(h('section', { class: 'intro', id: 'intro' },
-    h('div', { class: 'intro-kicker' }, today),
-    h('h1', {}, name ? `Hi ${name.split(' ')[0]}` : 'Hi there'),
-    h('p', { class: 'intro-sub' }, 'Your rules for today’s session.'),
+    h('div', { class: 'rules-head' },
+      h('div', {}, h('div', { class: 'intro-kicker' }, today), h('h1', {}, 'Rules')),
+      addBtn),
     loadError ? h('p', { class: 'notice' }, 'Your rules could not be loaded. Check your connection and open this page again.') : null,
-    empty, list, addBtn));
+    empty, list));
   draw();
 }
